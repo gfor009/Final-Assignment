@@ -21,9 +21,6 @@
     @media (min-width: 900px){.grid{grid-template-columns:1.1fr .9fr}}
     .card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:16px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
     .card h2{margin:0 0 8px;font-size:18px}
-    .controls{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-    .control{display:flex;gap:8px;align-items:center;color:var(--muted)}
-    select,input[type="range"]{background:#0f1220;color:var(--text);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px 10px}
     .small{font-size:12px;color:var(--muted)}
     footer{margin:24px 0;color:var(--muted)}
     a{color:var(--accent);text-decoration:none}
@@ -36,19 +33,19 @@
   <div class="wrap">
     <header>
       <h1>UFO Sightings Explorer</h1>
-      <p>Drop this <code>index.html</code> and your CSVs in the same folder. This version uses your new <code>ufo_cities_latlon.csv</code> for the map, and reads the other (semicolon) CSVs correctly.</p>
+      <p>Place this <code>index.html</code> together with: <code>ufo_cities_latlon.csv</code> (comma CSV), and semicolon CSVs <code>ufo_monthly.csv</code>, <code>ufo_shape.csv</code>, <code>ufo_hourly.csv</code>, <code>ufo_year.csv</code>, <code>ufo_day.csv</code>.</p>
     </header>
 
     <section class="grid">
       <div class="card">
         <h2>Global hotspots (city points)</h2>
         <div id="map" class="viz"></div>
-        <p class="small">Data: <code>ufo_cities_latlon.csv</code> (city, state, country, latitude, longitude, count).</p>
+        <p class="small">Data: <code>ufo_cities_latlon.csv</code> — columns: city, state, country, latitude, longitude, count.</p>
       </div>
       <div class="card">
         <h2>Monthly sightings</h2>
         <div id="monthly" class="viz"></div>
-        <p class="small">Data: <code>ufo_monthly.csv</code> (semicolon-delimited).</p>
+        <p class="small">Data: <code>ufo_monthly.csv</code> (semicolon).</p>
       </div>
     </section>
 
@@ -77,7 +74,7 @@
     <footer>
       <div class="meta">
         <div>Author: Your Name • Date: <span id="today"></span></div>
-        <div>Tools: Vega-Lite v5 + vega-embed.</div>
+        <div>Tools: Vega-Lite v5 + vega-embed</div>
       </div>
     </footer>
   </div>
@@ -85,15 +82,15 @@
   <script>
     document.getElementById('today').textContent = new Date().toISOString().slice(0,10);
 
-    // Helper to read semicolon-delimited CSVs
+    // Helper for semicolon-delimited CSVs
     const dataSemi = (url) => ({ url, format: { type: 'csv', delimiter: ';' } });
 
-    // 1) Map from ufo_cities_latlon.csv (comma CSV)
+    // 1) Map (comma CSV)
     async function renderMap(){
       const spec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
         width: 600, height: 360,
-        data: { url: 'ufo_cities_latlon.csv' },
+        data: { url: 'ufo_cities_latlon.csv', format: { type: 'csv', delimiter: ',' } },
         transform: [
           { filter: 'datum.latitude != null && datum.longitude != null' },
           { calculate: 'toNumber(datum.latitude)', as: 'lat' },
@@ -101,21 +98,21 @@
           { calculate: 'toNumber(datum.count)', as: 'c' }
         ],
         projection: { type: 'equalEarth' },
-        mark: { type:'circle', tooltip:true, opacity:0.8, stroke:'#11131a', strokeWidth:0.5 },
+        mark: { type: 'circle', tooltip: true, opacity: 0.8, stroke: '#11131a', strokeWidth: 0.5 },
         encoding: {
-          longitude: { field:'lon', type:'quantitative' },
-          latitude: { field:'lat', type:'quantitative' },
-          size: { field:'c', type:'quantitative', legend:{title:'Reports'}, scale:{ type:'sqrt', range:[10, 900]} },
-          color: { field:'c', type:'quantitative', legend:{title:'Reports'} },
+          longitude: { field: 'lon', type: 'quantitative' },
+          latitude:  { field: 'lat', type: 'quantitative' },
+          size:  { field: 'c', type: 'quantitative', legend: { title: 'Reports' }, scale: { type: 'sqrt', range: [10, 900] } },
+          color: { field: 'c', type: 'quantitative', legend: { title: 'Reports' } },
           tooltip: [
-            {field:'city', title:'City'},
-            {field:'state', title:'State'},
-            {field:'country', title:'Country'},
-            {field:'c', title:'Reports', type:'quantitative'}
+            { field: 'city', title: 'City' },
+            { field: 'state', title: 'State' },
+            { field: 'country', title: 'Country' },
+            { field: 'c', title: 'Reports', type: 'quantitative' }
           ]
         }
       };
-      return vegaEmbed('#map', spec, {actions:false});
+      return vegaEmbed('#map', spec, { actions:false });
     }
 
     // 2) Monthly area (semicolon CSV)
@@ -125,13 +122,13 @@
         width: 560, height: 320,
         data: dataSemi('ufo_monthly.csv'),
         transform: [ { calculate: 'toNumber(datum.count)', as: 'c' } ],
-        mark: { type:'area', line:true, tooltip:true, opacity:0.25 },
+        mark: { type: 'area', line: true, tooltip: true, opacity: 0.25 },
         encoding: {
-          x: { field:'month', type:'temporal', title:'Month' },
-          y: { field:'c', type:'quantitative', title:'Sightings' }
+          x: { field: 'month', type: 'temporal', title: 'Month' },
+          y: { field: 'c', type: 'quantitative', title: 'Sightings' }
         }
       };
-      return vegaEmbed('#monthly', spec, {actions:false});
+      return vegaEmbed('#monthly', spec, { actions:false });
     }
 
     // 3) Shapes (semicolon CSV)
@@ -144,13 +141,13 @@
           { calculate: 'lower(trim(datum.shape))', as: 'shape_lc' },
           { calculate: 'toNumber(datum.count)', as: 'c' }
         ],
-        mark: { type:'bar', tooltip:true },
+        mark: { type: 'bar', tooltip: true },
         encoding: {
-          y: { field:'shape_lc', type:'nominal', sort:'-x', title:'Shape' },
-          x: { field:'c', type:'quantitative', title:'Reports' }
+          y: { field: 'shape_lc', type: 'nominal', sort: '-x', title: 'Shape' },
+          x: { field: 'c', type: 'quantitative', title: 'Reports' }
         }
       };
-      return vegaEmbed('#shapes', spec, {actions:false});
+      return vegaEmbed('#shapes', spec, { actions:false });
     }
 
     // 4) Hourly bar (semicolon CSV)
@@ -159,14 +156,17 @@
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
         width: 560, height: 320,
         data: dataSemi('ufo_hourly.csv'),
-        transform: [ { calculate: 'toNumber(datum.hour)', as:'h' }, { calculate: 'toNumber(datum.count)', as:'c' } ],
-        mark: { type:'bar', tooltip:true },
+        transform: [
+          { calculate: 'toNumber(datum.hour)', as: 'h' },
+          { calculate: 'toNumber(datum.count)', as: 'c' }
+        ],
+        mark: { type: 'bar', tooltip: true },
         encoding: {
-          x: { field:'h', type:'ordinal', title:'Hour (0–23)', sort:'ascending' },
-          y: { field:'c', type:'quantitative', title:'Reports' }
+          x: { field: 'h', type: 'ordinal', title: 'Hour (0–23)', sort: 'ascending' },
+          y: { field: 'c', type: 'quantitative', title: 'Reports' }
         }
       };
-      return vegaEmbed('#hourly', spec, {actions:false});
+      return vegaEmbed('#hourly', spec, { actions:false });
     }
 
     // 5) Yearly line (semicolon CSV)
@@ -175,14 +175,17 @@
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
         width: 560, height: 320,
         data: dataSemi('ufo_year.csv'),
-        transform: [ { calculate: 'toNumber(datum.year)', as:'y' }, { calculate: 'toNumber(datum.count)', as:'c' } ],
-        mark: { type:'line', point:true, tooltip:true },
+        transform: [
+          { calculate: 'toNumber(datum.year)', as: 'y' },
+          { calculate: 'toNumber(datum.count)', as: 'c' }
+        ],
+        mark: { type: 'line', point: true, tooltip: true },
         encoding: {
-          x: { field:'y', type:'quantitative', title:'Year' },
-          y: { field:'c', type:'quantitative', title:'Sightings' }
+          x: { field: 'y', type: 'quantitative', title: 'Year' },
+          y: { field: 'c', type: 'quantitative', title: 'Sightings' }
         }
       };
-      return vegaEmbed('#yearly', spec, {actions:false});
+      return vegaEmbed('#yearly', spec, { actions:false });
     }
 
     // 6) Day area (semicolon CSV)
@@ -191,14 +194,17 @@
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
         width: 560, height: 320,
         data: dataSemi('ufo_day.csv'),
-        transform: [ { calculate: 'toNumber(datum.day)', as:'d' }, { calculate: 'toNumber(datum.count)', as:'c' } ],
-        mark: { type:'area', line:true, tooltip:true, opacity:0.2 },
+        transform: [
+          { calculate: 'toNumber(datum.day)', as: 'd' },
+          { calculate: 'toNumber(datum.count)', as: 'c' }
+        ],
+        mark: { type: 'area', line: true, tooltip: true, opacity: 0.2 },
         encoding: {
-          x: { field:'d', type:'quantitative', title:'Day' },
-          y: { field:'c', type:'quantitative', title:'Reports' }
+          x: { field: 'd', type: 'quantitative', title: 'Day' },
+          y: { field: 'c', type: 'quantitative', title: 'Reports' }
         }
       };
-      return vegaEmbed('#day', spec, {actions:false});
+      return vegaEmbed('#day', spec, { actions:false });
     }
 
     Promise.all([
