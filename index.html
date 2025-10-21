@@ -21,7 +21,7 @@
 <body>
   <div class="container">
     <h1>UFO Sightings Explorer — USA Focus</h1>
-    <p>CSV files must live in the <code>/data</code> folder next to this file.</p>
+    <p>CSVs must live in the <code>/data</code> folder next to this file.</p>
 
     <div class="grid">
       <div class="card">
@@ -44,101 +44,126 @@
   </div>
 
   <script>
-    // ---- Define your data paths (this was missing) ----
+    // ---- Paths to your files (root/data folder) ----
     const SRC = {
-      cities:  "data/ufo_cities.csv",    // expects: city;count   (semicolon CSV)
-      monthly: "data/ufo_monthly.csv",   // expects: month;count  (semicolon CSV)
-      shapes:  "data/ufo_shape.csv",     // expects: shape;count  (semicolon CSV)
-      hourly:  "data/ufo_hourly.csv"     // expects: hour;count   (semicolon CSV)
+      cities:  "data/ufo_cities.csv",    // city;count
+      monthly: "data/ufo_monthly.csv",   // month;count
+      shapes:  "data/ufo_shape.csv",     // shape;count
+      hourly:  "data/ufo_hourly.csv"     // hour;count
     };
 
-    // CSV loaders with explicit delimiters
-    const dataSemi  = (url) => ({ url, format: { type: 'csv', delimiter: ';' } });
+    // ---- Robust semicolon CSV loader (no fancy Vega expr) ----
+    async function loadSemi(url){
+      const res = await fetch(url);
+      if(!res.ok) throw new Error(`Fetch failed ${url}: ${res.status}`);
+      const text = (await res.text()).trim();
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      if(lines.length < 2) return [];
+      const headers = lines[0].split(';').map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const cells = line.split(';');
+        const row = {};
+        headers.forEach((h,i) => row[h] = (cells[i] ?? '').trim());
+        return row;
+      });
+    }
 
-    // ---- 1) Top Cities (uses data/ufo_cities.csv) ----
-    const citiesSpec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: 560, height: 340,
-      data: dataSemi(SRC.cities),
-      transform: [
-        { calculate: "lower(trim(datum.city))", as: "city_clean" },
-        { calculate: "toNumber(datum.count)", as: "c" },
-        { filter: "isFinite(datum.c)" },
-        { window: [{op:'rank', as:'r'}], sort:[{field:'c', order:'descending'}] },
-        { filter: "datum.r <= 30" } // Top 30 cities
-      ],
-      mark: { type: "bar", tooltip: true },
-      encoding: {
-        y: { field: "city_clean", type: "nominal", sort: "-x", title: "City" },
-        x: { field: "c", type: "quantitative", title: "Reports" },
-        tooltip: [
-          { field: "city_clean", title: "City" },
-          { field: "c", type: "quantitative", title: "Reports" }
-        ]
-      }
-    };
+    // ---- 1) Top Cities (city;count) ----
+    async function renderCities(){
+      const rows = await loadSemi(SRC.cities);
+      // tidy + numeric
+      const values = rows
+        .map(r => ({ city: (r.city||'').trim().toLowerCase(), count: +r.count }))
+        .filter(r => r.city && Number.isFinite(r.count))
+        .sort((a,b)=> b.count - a.count)
+        .slice(0,30);
 
-    // ---- 2) Monthly (data/ufo_monthly.csv) ----
-    const monthlySpec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: 560, height: 340,
-      data: dataSemi(SRC.monthly),
-      transform: [
-        { calculate: "toDate(datum.month)", as: "m" },
-        { calculate: "toNumber(datum.count)", as: "c" },
-        { filter: "isDate(datum.m) && isFinite(datum.c)" }
-      ],
-      mark: { type: "line", point: true },
-      encoding: {
-        x: { field: "m", type: "temporal", title: "Month" },
-        y: { field: "c", type: "quantitative", title: "Sightings" },
-        color: { value: "#38bdf8" },
-        tooltip: [
-          { field: "m", type: "temporal", title: "Month" },
-          { field: "c", type: "quantitative", title: "Count" }
-        ]
-      }
-    };
+      const spec = {
+        $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+        width: 560, height: 340,
+        data: { values },
+        mark: { type: "bar", tooltip: true },
+        encoding: {
+          y: { field: "city", type: "nominal", sort: "-x", title: "City" },
+          x: { field: "count", type: "quantitative", title: "Reports" },
+          tooltip: [
+            { field: "city", title: "City" },
+            { field: "count", type: "quantitative", title: "Reports" }
+          ]
+        },
+        config: { background: null }
+      };
+      return vegaEmbed("#cities", spec, {actions:false});
+    }
 
-    // ---- 3) Shapes (data/ufo_shape.csv) ----
-    const shapesSpec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: 560, height: 340,
-      data: dataSemi(SRC.shapes),
-      transform: [
-        { calculate: "lower(trim(datum.shape))", as: "shape_clean" },
-        { calculate: "toNumber(datum.count)", as: "c" },
-        { filter: "datum.shape_clean != '' && isFinite(datum.c)" }
-      ],
-      mark: { type: "bar", tooltip: true },
-      encoding: {
-        y: { field: "shape_clean", type: "nominal", sort: "-x", title: "Shape" },
-        x: { field: "c", type: "quantitative", title: "Reports" }
-      }
-    };
+    // ---- 2) Monthly trend (month;count) ----
+    async function renderMonthly(){
+      const rows = await loadSemi(SRC.monthly);
+      const values = rows
+        .map(r => ({ month: new Date(r.month), count: +r.count }))
+        .filter(r => !isNaN(r.month.getTime()) && Number.isFinite(r.count));
 
-    // ---- 4) Hourly (data/ufo_hourly.csv) ----
-    const hourlySpec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: 560, height: 340,
-      data: dataSemi(SRC.hourly),
-      transform: [
-        { calculate: "toNumber(datum.hour)", as: "h" },
-        { calculate: "toNumber(datum.count)", as: "c" },
-        { filter: "isFinite(datum.h) && isFinite(datum.c)" }
-      ],
-      mark: { type: "bar", tooltip: true },
-      encoding: {
-        x: { field: "h", type: "ordinal", title: "Hour (0–23)", sort: "ascending" },
-        y: { field: "c", type: "quantitative", title: "Reports" }
-      }
-    };
+      const spec = {
+        $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+        width: 560, height: 340,
+        data: { values },
+        mark: { type: "line", point: true },
+        encoding: {
+          x: { field: "month", type: "temporal", title: "Month" },
+          y: { field: "count", type: "quantitative", title: "Sightings" },
+          color: { value: "#38bdf8" },
+          tooltip: [
+            { field: "month", type: "temporal", title: "Month" },
+            { field: "count", type: "quantitative", title: "Count" }
+          ]
+        }
+      };
+      return vegaEmbed("#monthly", spec, {actions:false});
+    }
 
-    // Render
-    vegaEmbed("#cities",  citiesSpec,  {actions:false}).catch(e=>console.error("Cities error:", e));
-    vegaEmbed("#monthly", monthlySpec, {actions:false}).catch(e=>console.error("Monthly error:", e));
-    vegaEmbed("#shapes",  shapesSpec,  {actions:false}).catch(e=>console.error("Shapes error:", e));
-    vegaEmbed("#hourly",  hourlySpec,  {actions:false}).catch(e=>console.error("Hourly error:", e));
+    // ---- 3) Shapes (shape;count) ----
+    async function renderShapes(){
+      const rows = await loadSemi(SRC.shapes);
+      const values = rows
+        .map(r => ({ shape: (r.shape||'').trim().toLowerCase(), count: +r.count }))
+        .filter(r => r.shape && Number.isFinite(r.count));
+
+      const spec = {
+        $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+        width: 560, height: 340,
+        data: { values },
+        mark: { type: "bar", tooltip: true },
+        encoding: {
+          y: { field: "shape", type: "nominal", sort: "-x", title: "Shape" },
+          x: { field: "count", type: "quantitative", title: "Reports" }
+        }
+      };
+      return vegaEmbed("#shapes", spec, {actions:false});
+    }
+
+    // ---- 4) Hourly (hour;count) ----
+    async function renderHourly(){
+      const rows = await loadSemi(SRC.hourly);
+      const values = rows
+        .map(r => ({ hour: +r.hour, count: +r.count }))
+        .filter(r => Number.isFinite(r.hour) && Number.isFinite(r.count));
+
+      const spec = {
+        $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+        width: 560, height: 340,
+        data: { values },
+        mark: { type: "bar", tooltip: true },
+        encoding: {
+          x: { field: "hour", type: "ordinal", title: "Hour (0–23)", sort: "ascending" },
+          y: { field: "count", type: "quantitative", title: "Reports" }
+        }
+      };
+      return vegaEmbed("#hourly", spec, {actions:false});
+    }
+
+    // Run all renders (and surface errors in console)
+    Promise.all([renderCities(), renderMonthly(), renderShapes(), renderHourly()])
+      .catch(err => console.error(err));
   </script>
 </body>
 </html>
