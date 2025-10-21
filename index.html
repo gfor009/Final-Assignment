@@ -412,7 +412,12 @@ async function renderShapes(){
   }
 }
 
-Promise.all([renderMap(), renderMonthly(), renderHourly(), renderCities(), renderShapes()]);
-</script>
-</body>
-</html>
+Promise.all([
+  renderMap(),
+  renderMonthly(),
+  renderHourly(),
+  renderCities(),
+  renderShapes(),
+  renderHeat()       // <-- add this
+]);
+
