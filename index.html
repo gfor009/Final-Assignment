@@ -64,12 +64,13 @@
 <script>
 /* ---------- paths & helpers ---------- */
 const PATHS = {
-  citiesLatLon: ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"], // city,state,country,latitude,longitude,count
-  cities:  ["data/ufo_cities.csv","ufo_cities.csv"],        // city;count
-  monthly: ["data/ufo_monthly.csv","ufo_monthly.csv"],      // month;count (or date;count)
-  shapes:  ["data/ufo_shape.csv","ufo_shape.csv"],          // shape;count
-  hourly:  ["data/ufo_hourly.csv","ufo_hourly.csv"],        // hour;count
-  yearly:  ["data/ufo_year.csv","ufo_year.csv"]             // year;count
+  raw:     ["data/scrubbed.csv","scrubbed.csv","https://gfor009.github.io/FIT3179/scrubbed.csv"],
+  citiesLatLon: ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"],
+  cities:  ["data/ufo_cities.csv","ufo_cities.csv"],
+  monthly: ["data/ufo_monthly.csv","ufo_monthly.csv"],
+  shapes:  ["data/ufo_shape.csv","ufo_shape.csv"],
+  hourly:  ["data/ufo_hourly.csv","ufo_hourly.csv"],
+  yearly:  ["data/ufo_year.csv","ufo_year.csv"]
 };
 
 async function fetchFirst(paths){
@@ -114,11 +115,8 @@ function ymKey(s){
   return null;
 }
 const BLUE = '#38bdf8';
-</script>
 
-<script>
-<script>
-/* ---------- 1) MAP (from raw, fixes bad city CSV) ---------- */
+/* ---------- 1) MAP (build from raw to avoid bad CSV) ---------- */
 async function renderMap(){
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
@@ -146,7 +144,7 @@ async function renderMap(){
       const state = (r[iState]||'').trim();
       const lat = smartDeg(r[iLat]), lon = smartDeg(r[iLon]);
       if (!isFinite(lat)||!isFinite(lon)) continue;
-      // keep only USA-ish bbox
+      // USA-ish bbox
       if (lat < 18 || lat > 72 || lon > -60 || lon < -170) continue;
 
       const key = city.toLowerCase()+'|'+state.toLowerCase();
@@ -184,7 +182,7 @@ async function renderMap(){
             latitude: { field:'lat', type:'quantitative' },
             size:{ field:'count_capped', type:'quantitative',
                    title:'Sightings (capped)', scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,900] } },
-            color:{ value:'#38bdf8' },
+            color:{ value:BLUE },
             tooltip:[
               {field:'city', title:'City'}, {field:'state', title:'State'},
               {field:'count', type:'quantitative', title:'Reports'}
@@ -201,7 +199,6 @@ async function renderMap(){
     setBadge('b-map','failed to load', false);
   }
 }
-</script>
 
 /* ---------- 2) MONTHLY ---------- */
 async function renderMonthly(){
@@ -294,7 +291,7 @@ async function renderCities(){
       .map(c=>({ city:(c[iCity]||'').toLowerCase().trim(), count:smartInt(c[iC]) }))
       .filter(r=>r.city && isFinite(r.count))
       .sort((a,b)=>b.count-a.count)
-      .slice(0, 10); // top 10
+      .slice(0, 10);
 
     setBadge("b-cities", `loaded ${values.length} rows from ${url}`);
 
