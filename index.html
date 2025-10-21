@@ -31,6 +31,12 @@
       <div id="map" class="viz" style="min-height:420px"></div>
     </div>
 
+    <div class="card" style="grid-column:1/-1">
+  <h2>All sightings (binned heatmap) <span id="b-heat" class="badge">checking…</span></h2>
+  <div id="heat" class="viz" style="min-height:420px"></div>
+</div>
+
+
     <div class="card">
       <h2>Monthly trend (line+area) <span id="b-monthly" class="badge">checking…</span></h2>
       <div id="monthly" class="viz"></div>
@@ -215,6 +221,78 @@ async function renderMap(){
   }catch(e){
     console.error('Map load error:', e);
     const badge = document.getElementById('b-map');
+    if (badge) { badge.textContent = 'failed to load'; badge.className = 'badge err'; }
+  }
+}
+
+// Heatmap of ALL reports from scrubbed.csv (one row per sighting)
+async function renderHeat(){
+  // helper: convert dotted coords like "401.947.222" -> 40.1947222
+  function smartDeg(s){
+    const t = String(s ?? "").trim();
+    const direct = Number(t.replace(',', '.'));
+    if (isFinite(direct)) return direct;
+    const neg = t.startsWith('-') ? -1 : 1;
+    const digits = t.replace(/[^0-9]/g, '');
+    if (!digits) return NaN;
+    const scale = Math.pow(10, Math.max(7, digits.length - 2));
+    return neg * (Number(digits) / scale);
+  }
+
+  try{
+    // scrubbed.csv is at repo root. If you moved it to /data, change to "data/scrubbed.csv"
+    const r = await fetch("scrubbed.csv?v=" + Date.now());
+    if (!r.ok) throw new Error(r.status);
+    const txt = (await r.text()).trim();
+
+    const lines = txt.split(/\r?\n/);
+    const hdr = lines.shift().split(",").map(h=>h.trim().toLowerCase());
+    const idx = n => hdr.indexOf(n);
+
+    // Prefer numeric lat/lon columns if you created them, else parse originals
+    const iLatNum = idx("lat_num"), iLonNum = idx("lon_num");
+    const iLat = iLatNum >= 0 ? iLatNum : idx("latitude");
+    const iLon = iLonNum >= 0 ? iLonNum : idx("longitude");
+
+    const pts = lines.map(l=>{
+      const c = l.split(",");
+      const lat = iLatNum>=0 ? Number(c[iLat]) : smartDeg(c[iLat]);
+      const lon = iLonNum>=0 ? Number(c[iLon]) : smartDeg(c[iLon]);
+      return {lat, lon};
+    }).filter(d => isFinite(d.lat)&&isFinite(d.lon) &&
+                    d.lat>=-90&&d.lat<=90 && d.lon>=-180&&d.lon<=180);
+
+    const badge = document.getElementById("b-heat");
+    if (badge) { badge.textContent = `parsed ${pts.length} points from scrubbed.csv`; badge.className = "badge"; }
+
+    const spec = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:1180, height:420,
+      projection:{ type:'albersUsa' },
+      layer:[
+        { data:{ url:'https://vega.github.io/vega-datasets/data/us-10m.json',
+                 format:{ type:'topojson', feature:'states' } },
+          mark:{ type:'geoshape', fill:'#091120', stroke:'#1f2937' } },
+        { data:{ values: pts },
+          transform:[
+            { bin:true, field:'lon', as:'bx' },
+            { bin:true, field:'lat', as:'by' },
+            { aggregate:[{op:'count', as:'n'}], groupby:['bx','by'] }
+          ],
+          mark:{ type:'rect', opacity:0.85 },
+          encoding:{
+            x:{ field:'bx', type:'quantitative', title:'Longitude' },
+            y:{ field:'by', type:'quantitative', title:'Latitude' },
+            color:{ field:'n', type:'quantitative', title:'Reports', scale:{ scheme:'blues' } }
+          }
+        }
+      ],
+      config:{ background:null }
+    };
+    vegaEmbed('#heat', spec, {actions:false});
+  }catch(e){
+    console.error('Heatmap error:', e);
+    const badge = document.getElementById('b-heat');
     if (badge) { badge.textContent = 'failed to load'; badge.className = 'badge err'; }
   }
 }
