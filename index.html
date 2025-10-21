@@ -45,8 +45,7 @@
     footer{ margin:24px 0 60px; color:var(--muted); font-size:.85rem }
     code{ background:#0b1220; border:1px solid #1f2937; border-radius:6px; padding:2px 6px } a{ color:var(--brand) }
     .chart-note{ margin:8px 18px 18px; color:#cbd5e1; font-size:.95rem }
-    #map .card{ grid-column:1/-1 } /* full-width */
-    .warn{ display:none; margin:12px 0; padding:10px 14px; border-radius:10px; background:#3f1d1d; color:#fecaca; border:1px solid #7f1d1d }
+    #map .card{ grid-column:1/-1 } /* full-width map */
     @media (max-width: 880px){ .hero{ grid-template-columns:1fr } .grid{ grid-template-columns:1fr } }
   </style>
 </head>
@@ -68,7 +67,6 @@
         <div class="tag">UFO dataset · cleaned + aggregated</div>
         <h1>Where and when do UFO sightings cluster in the USA?</h1>
         <p>Four coordinated views summarise patterns in the data: a symbol map of top cities, a radial hourly rhythm, a monthly trend, and a yearly shape composition. Visual marks and channels are consistent; colour and figure-ground establish a clear hierarchy; annotations and short notes guide interpretation.</p>
-        <div id="warn" class="warn">Data warning: a CSV is missing or empty. Open DevTools → Console for details. Ensure files are in the <code>/data</code> folder (case-sensitive).</div>
       </div>
       <div class="kpis">
         <div class="kpi"><div class="label">Peak month count</div><div id="kpi1" class="value">—</div></div>
@@ -134,7 +132,7 @@
     <footer>Built with <code>Vega-Lite 5</code>. Place CSVs in <code>/data</code> next to this file and hard-refresh.</footer>
   </main>
 
-  <!-- ===== Data mapping (points to YOUR files) ===== -->
+  <!-- Point these at YOUR files (they already match your repo) -->
   <script>
     const DATA = {
       cities:  "data/ufo_cities_latlon.csv",
@@ -144,84 +142,58 @@
     };
   </script>
 
-  <!-- ===== Vega-Lite specs ===== -->
+  <!-- Vega-Lite specs (fixed expressions: no ??) -->
   <script>
-    // Quick CSV presence check
-    const files = [DATA.cities, DATA.hour, DATA.monthly, DATA.shapes];
-    (async () => {
-      try {
-        let warn=false;
-        for (const f of files){
-          const r = await fetch(f);
-          if (!r.ok){ console.error('Missing or unreachable:', f, r.status, r.statusText); warn=true; continue; }
-          const t=(await r.text()).trim(); const lines=t.split(/\r?\n/);
-          if (lines.length<2){ console.error('Empty or header-only CSV:', f); warn=true; }
-        }
-        if (warn) document.getElementById('warn').style.display='block';
-      } catch(e){ console.error('CSV check failed:', e); document.getElementById('warn').style.display='block'; }
-    })();
-
-    /* 1) SYMBOL MAP — USA-only, robust header mapping */
+    /* 1) USA symbol map — robust header mapping (no ??) + longitude normalisation */
     const symbolSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width: 1160, height: 420,
       projection: { type:'albersUsa' },
-      params: [{ name: "ptHover", select: { type:"point", fields:["CITY"], on:"mouseover", clear:"mouseout" } }],
       layer: [
-        { // basemap (USA only)
-          data:{ url:'https://vega.github.io/vega-datasets/data/world-110m.json', format:{ type:'topojson', feature:'countries' } },
+        {
+          data:{ url:'https://vega.github.io/vega-datasets/data/world-110m.json',
+                 format:{ type:'topojson', feature:'countries' } },
           transform:[ { filter: 'datum.id == 840' } ],
           mark:{ type:'geoshape', fill:'#0b1220', stroke:'#1f2937' }
         },
-        { // points
+        {
           data:{ url: DATA.cities },
           transform:[
-            { calculate: "toNumber(datum.latitude ?? datum.lat ?? datum.Latitude ?? datum.Lat)", as: "LAT" },
-            { calculate: "toNumber(datum.longitude ?? datum.lon ?? datum.lng ?? datum.Longitude ?? datum.Lon)", as: "LON" },
-            { calculate: "toNumber(datum.count ?? datum.sightings ?? datum.value ?? datum.total)", as: "VAL" },
-            { calculate: "(datum.city ?? datum.City ?? '')", as: "CITY" },
-            { calculate: "(datum.state ?? datum.State ?? '')", as: "STATE" },
-            { filter: "isValid(datum.LAT) && isValid(datum.LON)" },
-            { filter: "datum.LON >= -130 && datum.LON <= -60 && datum.LAT >= 22 && datum.LAT <= 50" }
+            { calculate: "toNumber(datum.latitude || datum.lat || datum.Latitude || datum.Lat)", as: "LAT_raw" },
+            { calculate: "toNumber(datum.longitude || datum.lon || datum.lng || datum.Longitude || datum.Lon || datum.long)", as: "LON_raw" },
+            { calculate: "toNumber(datum.count || datum.sightings || datum.value || datum.total)", as: "VAL" },
+            { calculate: "(datum.city || datum.City || 'Unknown')", as: "CITY" },
+            { calculate: "(datum.state || datum.State || datum.region || datum.Region || datum.country || datum.Country || '')", as: "STATE" },
+            // normalise 0..360 → -180..180 and rescue obvious swaps
+            { calculate: "datum.LON_raw > 180 ? datum.LON_raw - 360 : datum.LON_raw", as:"LON_norm" },
+            { calculate: "abs(datum.LON_norm) < 25 && abs(datum.LAT_raw) > 25 ? datum.LON_norm : datum.LAT_raw", as:"LAT2" },
+            { calculate: "abs(datum.LON_norm) < 25 && abs(datum.LAT_raw) > 25 ? datum.LAT_raw : datum.LON_norm", as:"LON2" },
+            { filter: "isValid(datum.LAT2) && isValid(datum.LON2) && isValid(datum.VAL)" },
+            // keep only continental USA to avoid stray points
+            { filter: "datum.LON2 >= -130 && datum.LON2 <= -60 && datum.LAT2 >= 22 && datum.LAT2 <= 50" }
           ],
           mark:{ type:'circle', opacity:0.95, stroke:'#0b1220', strokeWidth:0.6 },
           encoding:{
-            longitude:{ field:'LON', type:'quantitative' },
-            latitude:{ field:'LAT', type:'quantitative' },
+            longitude:{ field:'LON2', type:'quantitative' },
+            latitude:{ field:'LAT2', type:'quantitative' },
             size:{ field:'VAL', type:'quantitative', title:'Sightings', scale:{ range:[30,1600] } },
             color:{
               field:'CITY', type:'nominal', title:'City',
-              scale:{ range: ["#22c55e","#06b6d4","#a78bfa","#f59e0b","#ef4444","#14b8a6","#eab308","#f97316","#10b981","#60a5fa","#f472b6","#38bdf8"] },
+              scale:{ range:["#22c55e","#06b6d4","#a78bfa","#f59e0b","#ef4444","#14b8a6","#eab308","#f97316","#10b981","#60a5fa","#f472b6","#38bdf8"] },
               legend:{ orient:'bottom', direction:'horizontal', columns:6, labelLimit:220 }
             },
-            opacity:{ condition: { param:"ptHover", empty:false, value: 1 }, value: 0.78 },
-            tooltip:[ {field:'CITY', title:'City'}, {field:'STATE', title:'State'}, {field:'VAL', type:'quantitative', title:'Sightings'} ]
+            tooltip:[
+              {field:'CITY', title:'City'}, {field:'STATE', title:'State/Region'},
+              {field:'VAL', type:'quantitative', title:'Sightings'},
+              {field:'LAT2', title:'lat'}, {field:'LON2', title:'lon'}
+            ]
           }
-        },
-        { // labels for top 3
-          data:{ url: DATA.cities },
-          transform:[
-            { calculate: "toNumber(datum.latitude ?? datum.lat ?? datum.Latitude ?? datum.Lat)", as: "LAT" },
-            { calculate: "toNumber(datum.longitude ?? datum.lon ?? datum.lng ?? datum.Longitude ?? datum.Lon)", as: "LON" },
-            { calculate: "toNumber(datum.count ?? datum.sightings ?? datum.value ?? datum.total)", as: "VAL" },
-            { calculate: "(datum.city ?? datum.City ?? '')", as: "CITY" },
-            { filter: "isValid(datum.LAT) && isValid(datum.LON) && isValid(datum.VAL)" },
-            { filter: "datum.LON >= -130 && datum.LON <= -60 && datum.LAT >= 22 && datum.LAT <= 50" },
-            { window:[{op:"rank", as:"r"}], sort:[{field:"VAL", order:"descending"}] },
-            { filter: "datum.r <= 3" }
-          ],
-          layer:[
-            { mark:{ type:"text", dx: 8, dy: -10, font:"Space Grotesk", fontSize:12, fill:"#e5e7eb", stroke:"#0b1220", strokeWidth:2 },
-              encoding:{ longitude:{ field:"LON"}, latitude:{ field:"LAT"}, text:{ field:"CITY" } } },
-            { mark:{ type:"text", dx: 8, dy: 6, font:"Space Grotesk", fontSize:11, fill:"#9ca3af" },
-              encoding:{ longitude:{ field:"LON"}, latitude:{ field:"LAT"}, text:{ field:"VAL" } } }
-          ]
         }
       ],
-      config:{ background:null, legend:{ orient:'bottom', direction:'horizontal', columns:6, labelFontSize:11, titleFontSize:12, columnPadding:12 } }
+      config:{ background:null }
     };
 
-    /* 2) HOUR RADIAL — uses data/ufo_hourly.csv (hour,count) */
+    /* 2) Hour radial — expects hour,count */
     const hourSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:600, height:380,
@@ -237,32 +209,37 @@
       config:{legend:{orient:'bottom'}}
     };
 
-    /* 3) MONTHLY TREND — uses data/ufo_monthly.csv (month,count) */
+    /* 3) Monthly trend — accepts month OR date (any case), and count/value/total/sightings */
     const trendSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:600, height:280,
       data:{ url: DATA.monthly },
+      transform:[
+        { calculate:"toDate(datum.month || datum.Month || datum.date || datum.Date)", as:"MONTH" },
+        { calculate:"toNumber(datum.count || datum.Count || datum.value || datum.total || datum.sightings)", as:"CNT" },
+        { filter:"isDate(datum.MONTH) && isFinite(datum.CNT)" }
+      ],
       mark:{type:'line', point:true},
       encoding:{
-        x:{field:'month', type:'temporal', title:'Month'},
-        y:{field:'count', type:'quantitative', title:'Sightings'},
+        x:{field:'MONTH', type:'temporal', title:'Month'},
+        y:{field:'CNT', type:'quantitative', title:'Sightings'},
         color:{value:'#38bdf8'},
-        tooltip:[{field:'month', type:'temporal'},{field:'count', type:'quantitative'}]
+        tooltip:[{field:'MONTH', type:'temporal', title:'Month'},{field:'CNT', type:'quantitative', title:'Count'}]
       }
     };
 
-    /* 4) SHAPES by YEAR — uses data/ufo_shape.csv (year,shape,share OR year,shape,count) */
+    /* 4) Shapes by year — accepts share OR count */
     const stackSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:600, height:380,
       data: { url: DATA.shapes },
       transform:[
-        { calculate:"toNumber(datum.share)", as:"share_num" },
-        { calculate:"toNumber(datum.count ?? datum.total ?? datum.value)", as:"count_num" },
-        { calculate:"toNumber(datum.year)", as:"YEAR" },
-        // If 'share' missing, compute from counts per year
-        { window:[{op:"sum", field:"count_num", as:"year_total"}], frame:[null,null], groupby:["YEAR"] },
-        { calculate:"isValid(datum.share_num) ? datum.share_num : (datum.count_num / datum.year_total)", as:"SHARE" }
+        { calculate:"toNumber(datum.year || datum.Year)", as:"YEAR" },
+        { calculate:"toNumber(datum.share || datum.Share)", as:"SHARE_raw" },
+        { calculate:"toNumber(datum.count || datum.Count || datum.value || datum.total)", as:"COUNT_raw" },
+        { window:[{op:"sum", field:"COUNT_raw", as:"year_total"}], frame:[null,null], groupby:["YEAR"] },
+        { calculate:"isFinite(datum.SHARE_raw) ? datum.SHARE_raw : datum.COUNT_raw / datum.year_total", as:"SHARE" },
+        { filter:"isFinite(datum.YEAR) && isFinite(datum.SHARE)" }
       ],
       mark:{type:'bar'},
       encoding:{
@@ -274,35 +251,36 @@
       }
     };
 
-    // Render
+    // Render all
     vegaEmbed('#symbolVis', symbolSpec, {actions:false}).catch(e=>console.error('Map render error:', e));
     vegaEmbed('#hourVis', hourSpec,   {actions:false}).catch(e=>console.error('Hour chart error:', e));
     vegaEmbed('#trendVis', trendSpec, {actions:false}).catch(e=>console.error('Trend chart error:', e));
     vegaEmbed('#stackVis', stackSpec, {actions:false}).catch(e=>console.error('Stacked chart error:', e));
 
-    // KPI loader (expects month,count)
+    // KPI loader — accepts month/date + count/value/total/sightings
     async function loadKpis(){
       try{
         const res = await fetch(DATA.monthly);
-        if(!res.ok){ console.error('KPI CSV missing:', res.status, res.statusText); document.getElementById('warn').style.display='block'; return; }
+        if(!res.ok){ console.error('KPI CSV missing:', res.status, res.statusText); return; }
         const text = (await res.text()).trim();
-        const rows = text.split(/\r?\n/);
-        if(rows.length<2){ console.error('KPI CSV has no rows'); document.getElementById('warn').style.display='block'; return; }
+        const rows = text.split(/\r?\n/); if(rows.length<2){ console.error('KPI CSV has no rows'); return; }
         const header = rows.shift().split(',');
-        const idxMonth = header.indexOf('month');
-        const idxCount = header.indexOf('count');
-        if(idxMonth<0 || idxCount<0){ console.error('KPI CSV headers must include "month,count"'); document.getElementById('warn').style.display='block'; return; }
-        const data = rows.map(r=>{ const c=r.split(','); return {month:c[idxMonth], count:+c[idxCount]}; });
+        const findIdx = names => names.map(n=>header.indexOf(n)).find(i=>i>=0);
+        const iMonth = findIdx(['month','Month','date','Date']);
+        const iCount = findIdx(['count','Count','value','total','sightings']);
+        if(iMonth==null || iCount==null){ console.error('KPI: need a month/date column and a count/value/total/sightings column'); return; }
+        const data = rows.map(r=>{ const c=r.split(','); return {month:new Date(c[iMonth]), count:+c[iCount]}; })
+                         .filter(d=>!isNaN(d.month.getTime()) && isFinite(d.count));
+        if(!data.length){ console.error('KPI: no valid rows after parsing'); return; }
         const total = data.reduce((a,d)=>a+d.count,0);
         const max = Math.max(...data.map(d=>d.count));
         const peak = data.reduce((a,b)=> (b.count>a.count? b : a));
         document.getElementById('kpi1').textContent = max;
         document.getElementById('kpi2').textContent = data.length + ' months';
-        document.getElementById('kpi3').textContent = peak.month;
+        document.getElementById('kpi3').textContent = peak.month.toISOString().slice(0,7);
         document.getElementById('kpi4').textContent = total;
       }catch(e){
         console.error('KPI load failed:', e);
-        document.getElementById('warn').style.display='block';
       }
     }
     loadKpis();
