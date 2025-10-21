@@ -257,7 +257,8 @@ async function renderCities(){
     const iCity=head.indexOf("city"), iC=Math.max(head.indexOf("count"), head.indexOf("total"));
     const values = rows.map(c=>({city:(c[iCity]||'').toLowerCase().trim(), count:smartInt(c[iC])}))
                        .filter(r=>r.city && isFinite(r.count))
-                       .sort((a,b)=>b.count-a.count).slice(0,30);
+                       .sort((a,b)=>b.count-a.count).slice(0,30)
+      .slice(0, 10);                 // ← only top 10;
 
     setBadge("b-cities", `loaded ${values.length} rows from ${url}`);
 
@@ -280,6 +281,7 @@ async function renderCities(){
 }
 
 /* ---------- 5) SHAPES ---------- */
+<script>
 async function renderShapes(){
   try{
     const {url,text} = await fetchFirst(PATHS.shapes);
@@ -287,8 +289,10 @@ async function renderShapes(){
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iS=head.indexOf("shape"), iC=Math.max(head.indexOf("count"), head.indexOf("total"));
-    const values = rows.map(c=>({shape:(c[iS]||'').toLowerCase().trim(), count:smartInt(c[iC])}))
-                       .filter(r=>r.shape && isFinite(r.count));
+
+    const values = rows
+      .map(c=>({ shape:(c[iS]||'').toLowerCase().trim(), count:smartInt(c[iC]) }))
+      .filter(r=>r.shape && isFinite(r.count));
 
     setBadge("b-shapes", `loaded ${values.length} rows from ${url}`);
 
@@ -296,11 +300,24 @@ async function renderShapes(){
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:560, height:340,
       data:{ values },
-      mark:{ type:'bar', tooltip:true },
-      encoding:{
-        y:{ field:'shape', type:'nominal', sort:'-x', title:'Shape' },
-        x:{ field:'count', type:'quantitative', title:'Reports' }
-      },
+      layer:[
+        {
+          mark:{ type:'rule', stroke:'#64748b', strokeWidth:2 },
+          encoding:{
+            y:{ field:'shape', type:'nominal', sort:'-x', title:'Shape' },
+            x:{ field:'count', type:'quantitative', title:'Reports' },
+            x2:{ value:0 }
+          }
+        },
+        {
+          mark:{ type:'point', filled:true, size:80, color:'#38bdf8' },
+          encoding:{
+            y:{ field:'shape', type:'nominal', sort:'-x' },
+            x:{ field:'count', type:'quantitative' },
+            tooltip:[{field:'shape'},{field:'count',type:'quantitative',title:'Reports'}]
+          }
+        }
+      ],
       config:{ background:null }
     };
     await vegaEmbed('#shapes', spec, {actions:false});
@@ -309,6 +326,7 @@ async function renderShapes(){
     setBadge('b-shapes','failed to load', false);
   }
 }
+</script>
 
 /* ---------- 6) YEARLY ---------- */
 async function renderYearly(){
