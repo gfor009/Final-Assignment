@@ -28,11 +28,11 @@
   <h1>UFO Sightings Explorer — USA Focus</h1>
   <p>CSVs can live in <code>/data</code> or the repo root. Badges show what each chart loaded.</p>
 
-  <div class="grid">
-    <div class="card wide">
-      <h2>US city hotspots (map) <span id="b-map" class="badge">checking…</span></h2>
-      <div id="map" class="viz" style="min-height:420px"></div>
-    </div>
+  <div class="card wide">
+  <h2>US density (binned grid) <span id="b-mapbin" class="badge">checking…</span></h2>
+  <div id="mapbin" class="viz" style="min-height:420px"></div>
+</div>
+
 
     <div class="card">
       <h2>Monthly trend <span id="b-monthly" class="badge">checking…</span></h2>
@@ -117,89 +117,64 @@ function ymKey(s){
 const BLUE = '#38bdf8';
 
 /* ---------- 1) MAP (build from raw to avoid bad CSV) ---------- */
-async function renderMap(){
+async function renderMapBinned(){
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
                    format:{ type:'topojson', feature:'states' } };
-
-    const {url,text} = await fetchFirst(PATHS.raw);
+    const {url,text} = await fetchFirst(PATHS.raw || ["data/scrubbed.csv","scrubbed.csv","https://gfor009.github.io/FIT3179/scrubbed.csv"]);
     const first = (text.split(/\r?\n/)[0]||'');
     const delim = first.includes(';') ? ';' : ',';
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
-
     const idx = n => head.indexOf(n);
-    const iCity = idx('city'), iState = Math.max(idx('state'), idx('state/province'));
     const iCountry = idx('country');
     const iLat = Math.max(idx('latitude'), idx('lat'));
     const iLon = Math.max(idx('longitude'), idx('lon'), idx('lng'));
 
-    if ([iCity,iState,iCountry,iLat,iLon].some(i=>i<0)) throw new Error('scrubbed.csv missing required columns');
-
-    // group by city+state for US only
-    const map = new Map();
+    // Keep raw points (US only); Vega-Lite will bin + aggregate.
+    const values = [];
     for (const r of rows){
       if ((r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
-      const city = (r[iCity]||'').trim();
-      const state = (r[iState]||'').trim();
       const lat = smartDeg(r[iLat]), lon = smartDeg(r[iLon]);
       if (!isFinite(lat)||!isFinite(lon)) continue;
-      // USA-ish bbox
-      if (lat < 18 || lat > 72 || lon > -60 || lon < -170) continue;
-
-      const key = city.toLowerCase()+'|'+state.toLowerCase();
-      const cur = map.get(key) || {city, state, latSum:0, lonSum:0, n:0};
-      cur.latSum += lat; cur.lonSum += lon; cur.n += 1;
-      map.set(key, cur);
+      if (lat < 18 || lat > 72 || lon > -60 || lon < -170) continue; // continental-ish box
+      values.push({lat, lon});
     }
-
-    const values = [...map.values()].map(d => ({
-      city: d.city,
-      state: d.state,
-      lat: d.latSum / d.n,
-      lon: d.lonSum / d.n,
-      count: d.n
-    }));
-
-    setBadge("b-map", `loaded ${values.length} cities from ${url}`);
-
-    // robust cap (99th percentile)
-    const counts = values.map(d=>d.count).sort((a,b)=>a-b);
-    const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1;
-    const domainMax = Math.max(1, q99);
+    setBadge("b-mapbin", `loaded ${values.length} points from ${url}`);
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:1180, height:420,
       projection:{ type:'albersUsa' },
       layer:[
-        { data:topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#98a0ab' } },
-        { data:{ values },
-          transform:[ {calculate:`min(datum.count, ${domainMax})`, as:'count_capped'} ],
-          mark:{ type:'circle', tooltip:true, opacity:0.9, stroke:'#0b1220', strokeWidth:0.6 },
+        { data: topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#98a0ab' } },
+        {
+          data:{ values },
+          // BIN into a regular grid (change step to coarser/finer)
+          mark:{ type:'circle', opacity:0.9, stroke:'#0b1220', strokeWidth:0.3 },
           encoding:{
-            longitude:{ field:'lon', type:'quantitative' },
-            latitude: { field:'lat', type:'quantitative' },
-            size:{ field:'count_capped', type:'quantitative',
-                   title:'Sightings (capped)', scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,900] } },
-            color:{ value:BLUE },
-            tooltip:[
-              {field:'city', title:'City'}, {field:'state', title:'State'},
-              {field:'count', type:'quantitative', title:'Reports'}
+            longitude:{ field:'lon', type:'quantitative', bin:{step:1} },  // 1° bins
+            latitude: { field:'lat', type:'quantitative', bin:{step:1} },
+            size:     { aggregate:'count', type:'quantitative',
+                        scale:{ type:'sqrt', range:[0,1200] }, title:'Sightings' },
+            color:    { aggregate:'count', type:'quantitative',
+                        scale:{ scheme:'blues' }, title:'Sightings' },
+            tooltip:  [
+              {aggregate:'count', title:'Sightings'},
+              {field:'lat', bin:true, title:'Lat bin'},
+              {field:'lon', bin:true, title:'Lon bin'}
             ]
           }
         }
       ],
       config:{ background:null }
     };
-
-    await vegaEmbed('#map', spec, {actions:false});
+    await vegaEmbed('#mapbin', spec, {actions:false});
   }catch(e){
-    console.error('Map error:', e);
-    setBadge('b-map','failed to load', false);
+    console.error('Map (binned) error:', e);
+    setBadge('b-mapbin','failed to load', false);
   }
 }
-
 /* ---------- 2) MONTHLY ---------- */
 async function renderMonthly(){
   try{
@@ -384,13 +359,14 @@ async function renderYearly(){
 
 /* ---------- run all ---------- */
 Promise.all([
-  renderMap(),
+  renderMapBinned(),   // ← add this
   renderMonthly(),
   renderHourly(),
   renderCities(),
   renderShapes(),
   renderYearly()
 ]);
+
 </script>
 </body>
 </html>
