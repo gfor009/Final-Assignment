@@ -27,39 +27,37 @@
 <div class="container">
   <h1>UFO Sightings Explorer — USA Focus</h1>
   <p>CSVs can live in <code>/data</code> or the repo root. Badges show what each chart loaded.</p>
-
+<div class="grid"><!-- START grid -->
   <div class="card wide">
-  <h2>US density (binned grid) <span id="b-mapbin" class="badge">checking…</span></h2>
-  <div id="mapbin" class="viz" style="min-height:420px"></div>
-</div>
-
-
-    <div class="card">
-      <h2>Monthly trend <span id="b-monthly" class="badge">checking…</span></h2>
-      <div id="monthly" class="viz"></div>
-    </div>
-
-    <div class="card">
-      <h2>Hourly rhythm (radial) <span id="b-hourly" class="badge">checking…</span></h2>
-      <div id="hourly" class="viz"></div>
-    </div>
-
-    <div class="card">
-      <h2>Top 10 cities <span id="b-cities" class="badge">checking…</span></h2>
-      <div id="cities" class="viz"></div>
-    </div>
-
-    <div class="card">
-      <h2>Shapes (lollipop) <span id="b-shapes" class="badge">checking…</span></h2>
-      <div id="shapes" class="viz"></div>
-    </div>
-
-    <div class="card">
-      <h2>Yearly trend <span id="b-year" class="badge">checking…</span></h2>
-      <div id="yearly" class="viz"></div>
-    </div>
+    <h2>US density (binned grid) <span id="b-mapbin" class="badge">checking…</span></h2>
+    <div id="mapbin" class="viz" style="min-height:420px"></div>
   </div>
-</div>
+
+  <div class="card">
+    <h2>Monthly trend <span id="b-monthly" class="badge">checking…</span></h2>
+    <div id="monthly" class="viz"></div>
+  </div>
+
+  <div class="card">
+    <h2>Hourly rhythm (radial) <span id="b-hourly" class="badge">checking…</span></h2>
+    <div id="hourly" class="viz"></div>
+  </div>
+
+  <div class="card">
+    <h2>Top 10 cities <span id="b-cities" class="badge">checking…</span></h2>
+    <div id="cities" class="viz"></div>
+  </div>
+
+  <div class="card">
+    <h2>Shapes (lollipop) <span id="b-shapes" class="badge">checking…</span></h2>
+    <div id="shapes" class="viz"></div>
+  </div>
+
+  <div class="card">
+    <h2>Yearly trend <span id="b-year" class="badge">checking…</span></h2>
+    <div id="yearly" class="viz"></div>
+  </div>
+</div><!-- END grid -->
 
 <script>
 /* ---------- paths & helpers ---------- */
@@ -121,56 +119,67 @@ async function renderMapBinned(){
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
                    format:{ type:'topojson', feature:'states' } };
+
     const {url,text} = await fetchFirst(PATHS.raw || ["data/scrubbed.csv","scrubbed.csv","https://gfor009.github.io/FIT3179/scrubbed.csv"]);
     const first = (text.split(/\r?\n/)[0]||'');
     const delim = first.includes(';') ? ';' : ',';
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
+
     const idx = n => head.indexOf(n);
     const iCountry = idx('country');
     const iLat = Math.max(idx('latitude'), idx('lat'));
     const iLon = Math.max(idx('longitude'), idx('lon'), idx('lng'));
 
-    // Keep raw points (US only); Vega-Lite will bin + aggregate.
     const values = [];
     for (const r of rows){
       if ((r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
       const lat = smartDeg(r[iLat]), lon = smartDeg(r[iLon]);
       if (!isFinite(lat)||!isFinite(lon)) continue;
-      if (lat < 18 || lat > 72 || lon > -60 || lon < -170) continue; // continental-ish box
+      if (lat < 18 || lat > 72 || lon > -60 || lon < -170) continue;
       values.push({lat, lon});
     }
     setBadge("b-mapbin", `loaded ${values.length} points from ${url}`);
 
+    // --- parameters you can tweak ---
+    const STEP = 1;         // grid size in degrees (try 0.5 for finer)
+    const HALF = STEP/2;
+
     const spec = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:1180, height:420,
-      projection:{ type:'albersUsa' },
-      layer:[
-        { data: topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#98a0ab' } },
+      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      width: 1180, height: 420,
+      projection: { type: "albersUsa" },
+      layer: [
+        { data: topo, mark: { type: "geoshape", fill: "#091120", stroke: "#98a0ab" } },
         {
-          data:{ values },
-          // BIN into a regular grid (change step to coarser/finer)
-          mark:{ type:'circle', opacity:0.9, stroke:'#0b1220', strokeWidth:0.3 },
-          encoding:{
-            longitude:{ field:'lon', type:'quantitative', bin:{step:1} },  // 1° bins
-            latitude: { field:'lat', type:'quantitative', bin:{step:1} },
-            size:     { aggregate:'count', type:'quantitative',
-                        scale:{ type:'sqrt', range:[0,1200] }, title:'Sightings' },
-            color:    { aggregate:'count', type:'quantitative',
-                        scale:{ scheme:'blues' }, title:'Sightings' },
-            tooltip:  [
-              {aggregate:'count', title:'Sightings'},
-              {field:'lat', bin:true, title:'Lat bin'},
-              {field:'lon', bin:true, title:'Lon bin'}
+          data: { values },
+          transform: [
+            // compute bin centres in lon/lat, then aggregate counts per cell
+            { calculate: `floor((datum.lon + 180)/${STEP})*${STEP} - 180 + ${HALF}`, as: "lon_bin" },
+            { calculate: `floor((datum.lat +  90)/${STEP})*${STEP} -  90 + ${HALF}`, as: "lat_bin" },
+            { aggregate: [{ op: "count", as: "n" }], groupby: ["lon_bin","lat_bin"] }
+          ],
+          mark: { type: "circle", opacity: 0.9, stroke: "#0b1220", strokeWidth: 0.3 },
+          encoding: {
+            longitude: { field: "lon_bin", type: "quantitative" },
+            latitude:  { field: "lat_bin", type: "quantitative" },
+            size:      { field: "n", type: "quantitative", title: "Sightings",
+                         scale: { type: "sqrt", range: [0, 900] } },
+            color:     { field: "n", type: "quantitative", title: "Sightings",
+                         scale: { scheme: "blues" } },
+            tooltip: [
+              { field: "n", title: "Sightings" },
+              { field: "lat_bin", title: "Lat (bin ctr)" },
+              { field: "lon_bin", title: "Lon (bin ctr)" }
             ]
           }
         }
       ],
-      config:{ background:null }
+      config: { background: null }
     };
-    await vegaEmbed('#mapbin', spec, {actions:false});
-  }catch(e){
+
+    await vegaEmbed('#mapbin', spec, { actions:false });
+  } catch (e){
     console.error('Map (binned) error:', e);
     setBadge('b-mapbin','failed to load', false);
   }
