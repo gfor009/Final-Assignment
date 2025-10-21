@@ -5,17 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>UFO Sightings Explorer — USA Focus (Vega-Lite)</title>
   <meta name="description" content="USA-focused UFO visualisation: top cities map, hourly pattern, monthly trend, and shape composition." />
-
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-
-  <!-- Vega libs -->
   <script src="https://unpkg.com/vega@5"></script>
   <script src="https://unpkg.com/vega-lite@5"></script>
   <script src="https://unpkg.com/vega-embed@6"></script>
-
   <style>
     :root{ --bg:#0f172a; --panel:#111827; --ink:#e5e7eb; --muted:#9ca3af; --brand:#38bdf8; --accent:#a78bfa; }
     html,body{ margin:0; height:100%; background:radial-gradient(1200px 800px at 10% -10%, #1f2937 0%, var(--bg) 40%); color:var(--ink);
@@ -66,7 +61,7 @@
       <div>
         <div class="tag">UFO dataset · cleaned + aggregated</div>
         <h1>Where and when do UFO sightings cluster in the USA?</h1>
-        <p>Four coordinated views summarise patterns in the data: a symbol map of top cities, a radial hourly rhythm, a monthly trend, and a yearly shape composition. Visual marks and channels are consistent; colour and figure-ground establish a clear hierarchy; annotations and short notes guide interpretation.</p>
+        <p>Four coordinated views summarise patterns in the data: a symbol map of top cities, a radial hourly rhythm, a monthly trend, and a yearly shape composition.</p>
       </div>
       <div class="kpis">
         <div class="kpi"><div class="label">Peak month count</div><div id="kpi1" class="value">—</div></div>
@@ -83,7 +78,7 @@
           <span class="small">Projection: Albers USA · Hover to highlight</span>
         </header>
         <div id="symbolVis" class="body vis"></div>
-        <p class="chart-note">Clusters concentrate along major corridors and coastal metros; a handful of large bubbles indicate outsized reporting relative to neighbouring cities.</p>
+        <p class="chart-note">Clusters concentrate along major corridors and coastal metros.</p>
       </article>
     </section>
 
@@ -121,71 +116,70 @@
         <summary>Data, authorship & credits</summary>
         <ul class="meta">
           <li><strong>Author:</strong> Your Name</li>
-          <li><strong>Date:</strong> 21 Oct 2025</li>
-          <li><strong>Data files:</strong> <code>data/ufo_cities_latlon.csv</code>, <code>data/ufo_hourly.csv</code>, <code>data/ufo_monthly.csv</code>, <code>data/ufo_shape.csv</code></li>
-          <li><strong>Tools:</strong> Vega-Lite 5, custom HTML/CSS</li>
-          <li><strong>Licenses:</strong> Visuals CC BY 4.0; Code MIT</li>
+          <li><strong>Date:</strong> <span id="today"></span></li>
+          <li><strong>Data files:</strong> <code>ufo_cities_latlon.csv</code>, <code>ufo_hourly.csv</code>, <code>ufo_monthly.csv</code>, <code>ufo_shape.csv</code>, <code>ufo_year.csv</code></li>
+          <li><strong>Tools:</strong> Vega-Lite 5</li>
         </ul>
       </details>
     </section>
 
-    <footer>Built with <code>Vega-Lite 5</code>. Place CSVs in <code>/data</code> next to this file and hard-refresh.</footer>
+    <footer>Built with <code>Vega-Lite 5</code>. Place CSVs next to this file and hard-refresh.</footer>
   </main>
 
-  <!-- Point these at YOUR files (they already match your repo) -->
+  <!-- Point these at YOUR files in the ROOT (no /data) -->
   <script>
     const DATA = {
-      cities:  "data/ufo_cities_latlon.csv",
-      hour:    "data/ufo_hourly.csv",
-      monthly: "data/ufo_monthly.csv",
-      shapes:  "data/ufo_shape.csv"
+      cities:  "ufo_cities_latlon.csv",  // comma CSV
+      hour:    "ufo_hourly.csv",         // semicolon CSV
+      monthly: "ufo_monthly.csv",        // semicolon CSV
+      shapes:  "ufo_shape.csv",          // semicolon CSV
+      year:    "ufo_year.csv"            // semicolon CSV
     };
+    document.getElementById('today').textContent = new Date().toISOString().slice(0,10);
   </script>
 
-  <!-- Vega-Lite specs (fixed expressions: no ??) -->
   <script>
-    /* 1) USA symbol map — robust header mapping (no ??) + longitude normalisation */
+    // CSV loaders with correct delimiters
+    const dataComma = (url) => ({ url, format: { type: 'csv', delimiter: ',' } });
+    const dataSemi  = (url) => ({ url, format: { type: 'csv', delimiter: ';' } });
+    // Robust numeric cleaner (handles spaces, thousands commas, or decimal comma)
+    const clean = (s) => `replace(trim(${s}), ' ', '')`;
+    const decFixed = (s) =>
+      `indexof(${s}, ',')>=0 && indexof(${s}, '.')<0 ? replace(${s}, ',', '.') : replace(${s}, ',', '')`;
+    const num = (s) => `toNumber(${decFixed(clean(s))})`;
+
+    /* 1) USA symbol map (cities) */
     const symbolSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width: 1160, height: 420,
       projection: { type:'albersUsa' },
       layer: [
         {
-          data:{ url:'https://vega.github.io/vega-datasets/data/world-110m.json',
-                 format:{ type:'topojson', feature:'countries' } },
-          transform:[ { filter: 'datum.id == 840' } ],
+          data:{ url:'https://vega.github.io/vega-datasets/data/us-10m.json',
+                 format:{ type:'topojson', feature:'states' } },
           mark:{ type:'geoshape', fill:'#0b1220', stroke:'#1f2937' }
         },
         {
-          data:{ url: DATA.cities },
+          data: dataComma(DATA.cities),
           transform:[
-            { calculate: "toNumber(datum.latitude || datum.lat || datum.Latitude || datum.Lat)", as: "LAT_raw" },
-            { calculate: "toNumber(datum.longitude || datum.lon || datum.lng || datum.Longitude || datum.Lon || datum.long)", as: "LON_raw" },
-            { calculate: "toNumber(datum.count || datum.sightings || datum.value || datum.total)", as: "VAL" },
-            { calculate: "(datum.city || datum.City || 'Unknown')", as: "CITY" },
-            { calculate: "(datum.state || datum.State || datum.region || datum.Region || datum.country || datum.Country || '')", as: "STATE" },
-            // normalise 0..360 → -180..180 and rescue obvious swaps
-            { calculate: "datum.LON_raw > 180 ? datum.LON_raw - 360 : datum.LON_raw", as:"LON_norm" },
-            { calculate: "abs(datum.LON_norm) < 25 && abs(datum.LAT_raw) > 25 ? datum.LON_norm : datum.LAT_raw", as:"LAT2" },
-            { calculate: "abs(datum.LON_norm) < 25 && abs(datum.LAT_raw) > 25 ? datum.LAT_raw : datum.LON_norm", as:"LON2" },
-            { filter: "isValid(datum.LAT2) && isValid(datum.LON2) && isValid(datum.VAL)" },
-            // keep only continental USA to avoid stray points
-            { filter: "datum.LON2 >= -130 && datum.LON2 <= -60 && datum.LAT2 >= 22 && datum.LAT2 <= 50" }
+            { calculate: num('datum.latitude'),  as: 'LAT' },
+            { calculate: num('datum.longitude'), as: 'LON' },
+            { calculate: num('datum.count'),     as: 'VAL' },
+            { calculate: "(datum.city || 'Unknown')", as: "CITY" },
+            { calculate: "(datum.state || '')", as: "STATE" },
+            { filter: "isValid(datum.LAT) && isValid(datum.LON) && isValid(datum.VAL)" },
+            { filter: "datum.LON >= -130 && datum.LON <= -60 && datum.LAT >= 22 && datum.LAT <= 50" }
           ],
           mark:{ type:'circle', opacity:0.95, stroke:'#0b1220', strokeWidth:0.6 },
           encoding:{
-            longitude:{ field:'LON2', type:'quantitative' },
-            latitude:{ field:'LAT2', type:'quantitative' },
+            longitude:{ field:'LON', type:'quantitative' },
+            latitude:{ field:'LAT', type:'quantitative' },
             size:{ field:'VAL', type:'quantitative', title:'Sightings', scale:{ range:[30,1600] } },
-            color:{
-              field:'CITY', type:'nominal', title:'City',
-              scale:{ range:["#22c55e","#06b6d4","#a78bfa","#f59e0b","#ef4444","#14b8a6","#eab308","#f97316","#10b981","#60a5fa","#f472b6","#38bdf8"] },
-              legend:{ orient:'bottom', direction:'horizontal', columns:6, labelLimit:220 }
-            },
+            color:{ value:'#38bdf8' },
             tooltip:[
-              {field:'CITY', title:'City'}, {field:'STATE', title:'State/Region'},
+              {field:'CITY', title:'City'}, {field:'STATE', title:'State'},
               {field:'VAL', type:'quantitative', title:'Sightings'},
-              {field:'LAT2', title:'lat'}, {field:'LON2', title:'lon'}
+              {field:'LAT', title:'lat'}, {field:'LON', title:'lon'}
             ]
           }
         }
@@ -193,30 +187,33 @@
       config:{ background:null }
     };
 
-    /* 2) Hour radial — expects hour,count */
+    /* 2) Hour radial — ufo_hourly.csv (semicolon) expects hour;count */
     const hourSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:600, height:380,
-      data:{ url: DATA.hour },
-      transform:[{calculate:'format(datum.hour, "02")', as:'hlabel'}],
+      data: dataSemi(DATA.hour),
+      transform:[
+        { calculate: num('datum.hour'), as:'H' },
+        { calculate: num('datum.count'), as:'C' },
+        { calculate: 'format(datum.H, "02")', as:'hlabel' }
+      ],
       mark:{type:'arc', innerRadius:90, stroke:'#0b1220'},
       encoding:{
-        theta:{field:'count', type:'quantitative', stack:true},
-        color:{ field:'hlabel', type:'nominal', scale:{scheme:{name:'set3', count:24}},
-                legend:{title:'Hour (00–23)', orient:'bottom', columns:6, labelLimit:160} },
-        tooltip:[{field:'hour', title:'Hour (0–23)'},{field:'count', type:'quantitative'}]
+        theta:{field:'C', type:'quantitative', stack:true, title:'Reports'},
+        color:{ field:'hlabel', type:'nominal', legend:{title:'Hour (00–23)', orient:'bottom', columns:6, labelLimit:160} },
+        tooltip:[{field:'H', title:'Hour (0–23)', type:'quantitative'},{field:'C', title:'Reports', type:'quantitative'}]
       },
       config:{legend:{orient:'bottom'}}
     };
 
-    /* 3) Monthly trend — accepts month OR date (any case), and count/value/total/sightings */
+    /* 3) Monthly trend — ufo_monthly.csv (semicolon) expects month;count */
     const trendSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:600, height:280,
-      data:{ url: DATA.monthly },
+      data: dataSemi(DATA.monthly),
       transform:[
-        { calculate:"toDate(datum.month || datum.Month || datum.date || datum.Date)", as:"MONTH" },
-        { calculate:"toNumber(datum.count || datum.Count || datum.value || datum.total || datum.sightings)", as:"CNT" },
+        { calculate:"toDate(datum.month || datum.date)", as:"MONTH" },
+        { calculate:num('datum.count'), as:"CNT" },
         { filter:"isDate(datum.MONTH) && isFinite(datum.CNT)" }
       ],
       mark:{type:'line', point:true},
@@ -228,15 +225,15 @@
       }
     };
 
-    /* 4) Shapes by year — accepts share OR count */
+    /* 4) Shapes by year — ufo_shape.csv (semicolon) could be counts or shares */
     const stackSpec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:600, height:380,
-      data: { url: DATA.shapes },
+      data: dataSemi(DATA.shapes),
       transform:[
-        { calculate:"toNumber(datum.year || datum.Year)", as:"YEAR" },
-        { calculate:"toNumber(datum.share || datum.Share)", as:"SHARE_raw" },
-        { calculate:"toNumber(datum.count || datum.Count || datum.value || datum.total)", as:"COUNT_raw" },
+        { calculate:num('datum.year'),  as:"YEAR" },
+        { calculate:num('datum.share'), as:"SHARE_raw" },
+        { calculate:num('datum.count'), as:"COUNT_raw" },
         { window:[{op:"sum", field:"COUNT_raw", as:"year_total"}], frame:[null,null], groupby:["YEAR"] },
         { calculate:"isFinite(datum.SHARE_raw) ? datum.SHARE_raw : datum.COUNT_raw / datum.year_total", as:"SHARE" },
         { filter:"isFinite(datum.YEAR) && isFinite(datum.SHARE)" }
@@ -245,45 +242,40 @@
       encoding:{
         x:{field:'YEAR', type:'ordinal', title:'Year'},
         y:{field:'SHARE', type:'quantitative', stack:'normalize', title:'Shape share'},
-        color:{ field:'shape', type:'nominal', title:'UFO shape', scale:{scheme:'set2'},
-                legend:{orient:'bottom', columns:4, labelLimit:220} },
+        color:{ field:'shape', type:'nominal', title:'UFO shape', legend:{orient:'bottom', columns:4, labelLimit:220} },
         tooltip:[{field:'YEAR', title:'Year'},{field:'shape'},{field:'SHARE', type:'quantitative', title:'Share'}]
       }
     };
 
-    // Render all
-    vegaEmbed('#symbolVis', symbolSpec, {actions:false}).catch(e=>console.error('Map render error:', e));
-    vegaEmbed('#hourVis', hourSpec,   {actions:false}).catch(e=>console.error('Hour chart error:', e));
-    vegaEmbed('#trendVis', trendSpec, {actions:false}).catch(e=>console.error('Trend chart error:', e));
-    vegaEmbed('#stackVis', stackSpec, {actions:false}).catch(e=>console.error('Stacked chart error:', e));
+    // Render
+    vegaEmbed('#symbolVis', symbolSpec, {actions:false}).catch(e=>console.error('Map error:', e));
+    vegaEmbed('#hourVis',   hourSpec,   {actions:false}).catch(e=>console.error('Hour error:', e));
+    vegaEmbed('#trendVis',  trendSpec,  {actions:false}).catch(e=>console.error('Trend error:', e));
+    vegaEmbed('#stackVis',  stackSpec,  {actions:false}).catch(e=>console.error('Stack error:', e));
 
-    // KPI loader — accepts month/date + count/value/total/sightings
-    async function loadKpis(){
+    // KPIs from monthly
+    (async () => {
       try{
         const res = await fetch(DATA.monthly);
-        if(!res.ok){ console.error('KPI CSV missing:', res.status, res.statusText); return; }
+        if(!res.ok) return;
         const text = (await res.text()).trim();
-        const rows = text.split(/\r?\n/); if(rows.length<2){ console.error('KPI CSV has no rows'); return; }
-        const header = rows.shift().split(',');
-        const findIdx = names => names.map(n=>header.indexOf(n)).find(i=>i>=0);
-        const iMonth = findIdx(['month','Month','date','Date']);
-        const iCount = findIdx(['count','Count','value','total','sightings']);
-        if(iMonth==null || iCount==null){ console.error('KPI: need a month/date column and a count/value/total/sightings column'); return; }
-        const data = rows.map(r=>{ const c=r.split(','); return {month:new Date(c[iMonth]), count:+c[iCount]}; })
-                         .filter(d=>!isNaN(d.month.getTime()) && isFinite(d.count));
-        if(!data.length){ console.error('KPI: no valid rows after parsing'); return; }
-        const total = data.reduce((a,d)=>a+d.count,0);
-        const max = Math.max(...data.map(d=>d.count));
-        const peak = data.reduce((a,b)=> (b.count>a.count? b : a));
+        // semicolon CSV
+        const rows = text.split(/\r?\n/);
+        const hdr  = rows.shift().split(';');
+        const iM = hdr.findIndex(h=>/^(month|date)$/i.test(h));
+        const iC = hdr.findIndex(h=>/^(count|value|total|sightings)$/i.test(h));
+        const data = rows.map(r=>r.split(';')).map(c=>({m:new Date(c[iM]), c:+c[iC]}))
+                         .filter(d=>!isNaN(d.m.getTime()) && isFinite(d.c));
+        if(!data.length) return;
+        const total = data.reduce((a,d)=>a+d.c,0);
+        const max = Math.max(...data.map(d=>d.c));
+        const peak = data.reduce((a,b)=> (b.c>a.c? b : a));
         document.getElementById('kpi1').textContent = max;
         document.getElementById('kpi2').textContent = data.length + ' months';
-        document.getElementById('kpi3').textContent = peak.month.toISOString().slice(0,7);
+        document.getElementById('kpi3').textContent = peak.m.toISOString().slice(0,7);
         document.getElementById('kpi4').textContent = total;
-      }catch(e){
-        console.error('KPI load failed:', e);
-      }
-    }
-    loadKpis();
+      }catch(e){ console.error('KPI load failed:', e); }
+    })();
   </script>
 </body>
 </html>
