@@ -121,72 +121,88 @@ function ymKey(s){
 <script>
 // 1) MAP (needs ufo_cities_latlon.csv with commas)
 async function renderMap(){
-  // helper: turn "401.947.222" -> 40.1947222, "-925.830.556" -> -92.5830556
+  // helpers
   function smartDeg(s){
     const t = String(s ?? "").trim();
-    // try plain number first (handles normal decimals and "40.123")
+    // try plain number (handles normal decimals and 40,123 -> 40.123)
     const direct = Number(t.replace(',', '.'));
     if (isFinite(direct)) return direct;
-    // otherwise: strip everything but digits and leading minus, then scale
+    // dotted thousands like 401.947.222 -> 40.1947222 (9 digits) or 7+ digits in general
     const neg = t.startsWith('-') ? -1 : 1;
     const digits = t.replace(/[^0-9]/g, '');
     if (!digits) return NaN;
-    // your numbers are 7 significant digits: divide by 1e7
-    return neg * (Number(digits) / 1e7);
+    // scale to 7+ fractional digits
+    const scale = Math.pow(10, Math.max(7, digits.length - 2));
+    return neg * (Number(digits) / scale);
+  }
+  function pickIdx(headers, names){
+    const L = headers.map(h=>h.toLowerCase());
+    for(const n of names){
+      const i = L.indexOf(n.toLowerCase());
+      if(i >= 0) return i;
+    }
+    return -1;
   }
 
   try{
-    const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
-                   format:{ type:'topojson', feature:'states' } };
-
-    // load ufo_cities_latlon.csv (comma CSV) from /data or root
-    const tryPaths = ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"];
-    let text = null, src = null;
-    for (const p of tryPaths){
-      const r = await fetch(p + '?v=' + Date.now());
-      if (r.ok) { text = await r.text(); src = p; break; }
+    // fetch from /data or root
+    const paths = ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"];
+    let raw=null, src=null;
+    for(const p of paths){
+      const r = await fetch(p + "?v=" + Date.now());
+      if(r.ok){ raw = await r.text(); src = p; break; }
     }
-    if (!text) throw new Error('ufo_cities_latlon.csv not found in /data or root');
+    if(!raw) throw new Error("ufo_cities_latlon.csv not found");
 
-    // parse comma CSV quickly
-    const lines = text.trim().split(/\r?\n/).filter(Boolean);
-    const head = lines.shift().split(',').map(h=>h.trim());
-    const ix = (name) => head.indexOf(name);
-    const iCity = ix('city'), iState = ix('state'), iLat = ix('latitude'),
-          iLon  = ix('longitude'), iCnt  = ix('count');
+    // normalise delimiter: turn semicolons into commas, then split
+    const text = raw.replace(/;/g, ",").trim();
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    const headers = lines.shift().split(",").map(h=>h.trim());
+    const iCity = pickIdx(headers, ["city"]);
+    const iState = pickIdx(headers, ["state","region"]);
+    const iLat   = pickIdx(headers, ["latitude","lat"]);
+    const iLon   = pickIdx(headers, ["longitude","lon","lng","long"]);
+    const iCnt   = pickIdx(headers, ["count","sightings","value","total"]);
 
     const values = lines.map(l=>{
-      const c = l.split(',');
+      const c = l.split(",");
+      const lat = smartDeg(c[iLat]);
+      const lon = smartDeg(c[iLon]);
+      const cnt = Number(String(c[iCnt] ?? "").replace(/[, ]/g,""));
       return {
-        city: (c[iCity]||'').trim(),
-        state:(c[iState]||'').trim(),
-        lat:  smartDeg(c[iLat]),
-        lon:  smartDeg(c[iLon]),
-        count: Number(String(c[iCnt]||'').replace(/[, ]/g,''))
+        city: (c[iCity] ?? "").trim(),
+        state:(c[iState] ?? "").trim(),
+        lat, lon, count: cnt
       };
-    }).filter(d => isFinite(d.lat) && isFinite(d.lon) && isFinite(d.count)
+    }).filter(d => isFinite(d.lat)&&isFinite(d.lon)&&isFinite(d.count)
                    && d.lat>=-90 && d.lat<=90 && d.lon>=-180 && d.lon<=180);
 
-    // badge text if you use them
-    const badge = document.getElementById('b-map');
-    if (badge) { badge.textContent = `loaded ${values.length} rows from ${src}`; badge.className = 'badge'; }
+    // update badge if you have it
+    const badge = document.getElementById("b-map");
+    if (badge){ badge.textContent = `loaded ${values.length} rows from ${src}`; badge.className = "badge"; }
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width: 1180, height: 420,
-      projection: { type:'albersUsa' },
-      layer: [
-        { data: topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#1f2937' } },
+      width:1180, height:420,
+      projection:{ type:'albersUsa' },
+      layer:[
+        {
+          data:{ url:'https://vega.github.io/vega-datasets/data/us-10m.json',
+                 format:{ type:'topojson', feature:'states' } },
+          mark:{ type:'geoshape', fill:'#091120', stroke:'#1f2937' }
+        },
         {
           data:{ values },
           mark:{ type:'circle', tooltip:true, opacity:0.9, stroke:'#0b1220', strokeWidth:0.6 },
           encoding:{
             longitude:{ field:'lon', type:'quantitative' },
             latitude:{ field:'lat', type:'quantitative' },
-            size:{ field:'count', type:'quantitative', title:'Sightings', scale:{ type:'sqrt', range:[10,1600] } },
+            size:{ field:'count', type:'quantitative', title:'Sightings',
+                   scale:{ type:'sqrt', range:[10,1600] } },
             color:{ value:'#38bdf8' },
             tooltip:[
-              {field:'city', title:'City'}, {field:'state', title:'State'},
+              {field:'city', title:'City'},
+              {field:'state', title:'State'},
               {field:'count', type:'quantitative', title:'Reports'},
               {field:'lat', title:'lat'}, {field:'lon', title:'lon'}
             ]
@@ -195,7 +211,7 @@ async function renderMap(){
       ],
       config:{ background:null }
     };
-    return vegaEmbed('#map', spec, {actions:false});
+    vegaEmbed('#map', spec, {actions:false});
   }catch(e){
     console.error('Map load error:', e);
     const badge = document.getElementById('b-map');
