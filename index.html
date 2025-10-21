@@ -126,17 +126,33 @@ async function renderMap(){
     const lines = text.replace(/;/g,",").trim().split(/\r?\n/).filter(Boolean);
     const headers = lines.shift().split(",").map(h=>h.trim());
     const pick = (names)=>{ const L=headers.map(h=>h.toLowerCase()); for(const n of names){const i=L.indexOf(n.toLowerCase()); if(i>=0) return i;} return -1; };
-    const iCity=pick(['city']), iState=pick(['state','region']), iLat=pick(['latitude','lat']),
-          iLon =pick(['longitude','lon','lng','long']), iCnt=pick(['count','sightings','value','total']);
+    const iCity=pick(['city']),
+          iState=pick(['state','region']),
+          iLat=pick(['latitude','lat']),
+          iLon=pick(['longitude','lon','lng','long']),
+          iCnt=pick(['count','sightings','value','total']);
 
     const values = lines.map(l=>{
       const c=l.split(",");
       let lat=smartDeg(c[iLat]), lon=smartDeg(c[iLon]);
       if (Math.abs(lon) < 30 && Math.abs(lat) > 30) { const t=lat; lat=lon; lon=t; } // rescue swapped coords
-      return { city:(c[iCity]||'').trim(), state:(c[iState]||'').trim(), lat, lon, count:smartInt(c[iCnt]) };
-    }).filter(d=>isFinite(d.lat)&&isFinite(d.lon)&&isFinite(d.count)&&d.lat>=-90&&d.lat<=90&&d.lon>=-180&&d.lon<=180);
+      return {
+        city:(c[iCity]||'').trim(),
+        state:(c[iState]||'').trim(),
+        lat, lon,
+        count: smartInt(c[iCnt])
+      };
+    }).filter(d =>
+      isFinite(d.lat)&&isFinite(d.lon)&&isFinite(d.count)&&
+      d.lat>=-90&&d.lat<=90&&d.lon>=-180&&d.lon<=180 && d.count>=0
+    );
 
     setBadge("b-map", `loaded ${values.length} rows from ${url}`);
+
+    // ---- NEW: robust upper cap for bubble size (99th percentile) ----
+    const counts = values.map(d=>d.count).filter(n=>isFinite(n)&&n>0).sort((a,b)=>a-b);
+    const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1;
+    const domainMax = Math.max(1, q99); // prevents absurd legend like 8,000,000
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
@@ -145,16 +161,23 @@ async function renderMap(){
       layer:[
         { data:topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#98a0ab' } },
         { data:{ values },
+          transform:[
+            // cap size value so anything above q99 draws at the max bubble size
+            {calculate:`min(datum.count, ${domainMax})`, as:'count_capped'}
+          ],
           mark:{ type:'circle', tooltip:true, opacity:0.9, stroke:'#0b1220', strokeWidth:0.6 },
           encoding:{
             longitude:{ field:'lon', type:'quantitative' },
             latitude: { field:'lat', type:'quantitative' },
-            size:{ field:'count', type:'quantitative', title:'Sightings', scale:{ type:'sqrt', nice:true, range:[10,900] } },
-            color:{ value:BLUE },
+            size:{
+              field:'count_capped', type:'quantitative', title:'Sightings',
+              scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,900] }
+            },
+            color:{ value:'#38bdf8' },
             tooltip:[
-              {field:'city', title:'City'},{field:'state', title:'State'},
-              {field:'count', type:'quantitative', title:'Reports'},
-              {field:'lat', title:'lat'},{field:'lon', title:'lon'}
+              {field:'city', title:'City'},
+              {field:'state', title:'State'},
+              {field:'count', type:'quantitative', title:'Reports'}
             ]
           } }
       ],
