@@ -121,21 +121,56 @@ function ymKey(s){
 <script>
 // 1) MAP (needs ufo_cities_latlon.csv with commas)
 async function renderMap(){
+  // helper: turn "401.947.222" -> 40.1947222, "-925.830.556" -> -92.5830556
+  function smartDeg(s){
+    const t = String(s ?? "").trim();
+    // try plain number first (handles normal decimals and "40.123")
+    const direct = Number(t.replace(',', '.'));
+    if (isFinite(direct)) return direct;
+    // otherwise: strip everything but digits and leading minus, then scale
+    const neg = t.startsWith('-') ? -1 : 1;
+    const digits = t.replace(/[^0-9]/g, '');
+    if (!digits) return NaN;
+    // your numbers are 7 significant digits: divide by 1e7
+    return neg * (Number(digits) / 1e7);
+  }
+
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
                    format:{ type:'topojson', feature:'states' } };
-    const {url,text} = await fetchFirst(PATHS.citiesLatLon);
-    const rows = parseComma(text);
-    const values = rows.map(r => ({
-      city:(r.city||'').trim(),
-      state:(r.state||'').trim(),
-      lat: +String(r.latitude).replace(',', '.'),
-      lon: +String(r.longitude).replace(',', '.'),
-      count:+String(r.count).replace(/[, ]/g,'')
-    })).filter(d => isFinite(d.lat)&&isFinite(d.lon)&&isFinite(d.count) &&
-                    d.lon>=-180&&d.lon<=180 && d.lat>=-90&&d.lat<=90);
 
-    setBadge("b-map", `loaded ${values.length} rows from ${url}`);
+    // load ufo_cities_latlon.csv (comma CSV) from /data or root
+    const tryPaths = ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"];
+    let text = null, src = null;
+    for (const p of tryPaths){
+      const r = await fetch(p + '?v=' + Date.now());
+      if (r.ok) { text = await r.text(); src = p; break; }
+    }
+    if (!text) throw new Error('ufo_cities_latlon.csv not found in /data or root');
+
+    // parse comma CSV quickly
+    const lines = text.trim().split(/\r?\n/).filter(Boolean);
+    const head = lines.shift().split(',').map(h=>h.trim());
+    const ix = (name) => head.indexOf(name);
+    const iCity = ix('city'), iState = ix('state'), iLat = ix('latitude'),
+          iLon  = ix('longitude'), iCnt  = ix('count');
+
+    const values = lines.map(l=>{
+      const c = l.split(',');
+      return {
+        city: (c[iCity]||'').trim(),
+        state:(c[iState]||'').trim(),
+        lat:  smartDeg(c[iLat]),
+        lon:  smartDeg(c[iLon]),
+        count: Number(String(c[iCnt]||'').replace(/[, ]/g,''))
+      };
+    }).filter(d => isFinite(d.lat) && isFinite(d.lon) && isFinite(d.count)
+                   && d.lat>=-90 && d.lat<=90 && d.lon>=-180 && d.lon<=180);
+
+    // badge text if you use them
+    const badge = document.getElementById('b-map');
+    if (badge) { badge.textContent = `loaded ${values.length} rows from ${src}`; badge.className = 'badge'; }
+
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width: 1180, height: 420,
@@ -151,10 +186,9 @@ async function renderMap(){
             size:{ field:'count', type:'quantitative', title:'Sightings', scale:{ type:'sqrt', range:[10,1600] } },
             color:{ value:'#38bdf8' },
             tooltip:[
-              {field:'city', title:'City'},
-              {field:'state', title:'State'},
+              {field:'city', title:'City'}, {field:'state', title:'State'},
               {field:'count', type:'quantitative', title:'Reports'},
-              {field:'lat', title:'lat'},{field:'lon', title:'lon'}
+              {field:'lat', title:'lat'}, {field:'lon', title:'lon'}
             ]
           }
         }
@@ -164,10 +198,8 @@ async function renderMap(){
     return vegaEmbed('#map', spec, {actions:false});
   }catch(e){
     console.error('Map load error:', e);
-    setBadge('b-map','missing ufo_cities_latlon.csv', false);
-    // Show a friendly placeholder
-    document.getElementById('map').innerHTML =
-      '<p style="opacity:.7">Map needs <code>ufo_cities_latlon.csv</code> with columns: city,state,country,latitude,longitude,count (comma-CSV). Place it in <code>/data</code> or repo root.</p>';
+    const badge = document.getElementById('b-map');
+    if (badge) { badge.textContent = 'failed to load'; badge.className = 'badge err'; }
   }
 }
 
