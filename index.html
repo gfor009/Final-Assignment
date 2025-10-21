@@ -36,61 +36,46 @@
   <div class="wrap">
     <header>
       <h1>UFO Sightings Explorer</h1>
-      <p>Interactive views built from <code>scrubbed.csv</code>-derived datasets (monthly trend, city hotspots, shapes, and daily rhythm). Drop this file and all CSVs in the same folder (e.g., GitHub Pages repository) and open.</p>
-      <div class="controls card" id="controls">
-        <div class="control">
-          <label for="shapeSel">Shape</label>
-          <select id="shapeSel">
-            <option>All</option>
-            <option>light</option>
-            <option>circle</option>
-            <option>sphere</option>
-            <option>disk</option>
-            <option>triangle</option>
-            <option>fireball</option>
-            <option>formation</option>
-            <option>unknown</option>
-            <option>other</option>
-          </select>
-        </div>
-        <div class="control" style="gap:6px;min-width:240px">
-          <label for="yearMin">Year</label>
-          <input type="range" id="yearMin" min="1900" max="2025" value="1960"/>
-          <span class="small" id="yearMinOut">1960</span>
-          <span class="small">–</span>
-          <input type="range" id="yearMax" min="1900" max="2025" value="2015"/>
-          <span class="small" id="yearMaxOut">2015</span>
-        </div>
-      </div>
+      <p>Interactive visuals built directly from your uploaded CSVs: <code>ufo_monthly.csv</code>, <code>ufo_cities.csv</code>, <code>ufo_shape.csv</code>, <code>ufo_hourly.csv</code>, <code>ufo_year.csv</code>, and <code>ufo_day.csv</code>. (Your files are semicolon-delimited; the specs below read them as such.)</p>
     </header>
 
     <section class="grid">
       <div class="card">
-        <h2>Global hotspots by city</h2>
-        <div id="map" class="viz"></div>
-        <p class="small">Each dot is a city with at least one report. Size & color encode number of reports. Tooltip shows location and total.</p>
-      </div>
-      <div class="card">
         <h2>Monthly sightings</h2>
         <div id="monthly" class="viz"></div>
-        <p class="small">Counts aggregated to the first day of each month. Use the Shape and Year controls to filter.</p>
+        <p class="small">Counts aggregated by month from <code>ufo_monthly.csv</code>.</p>
+      </div>
+      <div class="card">
+        <h2>Top cities by reports</h2>
+        <div id="cities" class="viz"></div>
+        <p class="small">City-level totals from <code>ufo_cities.csv</code>. (This file has no lat/long, so a ranked bar chart is used instead of a map.)</p>
       </div>
     </section>
 
     <section class="grid" style="margin-top:16px">
       <div class="card">
-        <h2>Shapes (overall + filter aware)</h2>
+        <h2>Shapes distribution</h2>
         <div id="shapes" class="viz"></div>
       </div>
       <div class="card">
-        <h2>Daily rhythm (hour × weekday)</h2>
+        <h2>Hourly pattern</h2>
         <div id="hourly" class="viz"></div>
+      </div>
+    </section>
+
+    <section class="grid" style="margin-top:16px">
+      <div class="card">
+        <h2>Yearly trend</h2>
+        <div id="yearly" class="viz"></div>
+      </div>
+      <div class="card">
+        <h2>Day-of-month pattern</h2>
+        <div id="day" class="viz"></div>
       </div>
     </section>
 
     <footer>
       <div class="meta">
-        <div>Data: NUFORC (scrubbed), derived CSVs: <code>ufo_monthly.csv</code>, <code>ufo_cities.csv</code>, <code>ufo_shape.csv</code>, <code>ufo_hourly.csv</code>, <code>ufo_year.csv</code>, <code>ufo_day.csv</code>.</div>
         <div>Author: Your Name • Date: <span id="today"></span></div>
         <div>Tools: Vega-Lite v5 + vega-embed.</div>
       </div>
@@ -98,147 +83,117 @@
   </div>
 
   <script>
-    // Utility: format today
     document.getElementById('today').textContent = new Date().toISOString().slice(0,10);
 
-    // Read controls
-    const shapeSel = document.getElementById('shapeSel');
-    const yearMin = document.getElementById('yearMin');
-    const yearMax = document.getElementById('yearMax');
-    const yearMinOut = document.getElementById('yearMinOut');
-    const yearMaxOut = document.getElementById('yearMaxOut');
-    function syncYearLabels(){
-      if(+yearMin.value > +yearMax.value){ yearMin.value = yearMax.value; }
-      yearMinOut.textContent = yearMin.value;
-      yearMaxOut.textContent = yearMax.value;
-    }
-    yearMin.addEventListener('input', ()=>{ syncYearLabels(); renderAll(); });
-    yearMax.addEventListener('input', ()=>{ syncYearLabels(); renderAll(); });
-    shapeSel.addEventListener('change', renderAll);
-    syncYearLabels();
-
-    // Common filter transform
-    function filtersFor(datasetAlias){
-      return [
-        {"calculate": "toNumber(year(datum.datetime ? datum.datetime : datum.month ? datum.month : datum._dt))", "as": "_yr"},
-        {"filter": `datum._yr >= ${yearMin.value} && datum._yr <= ${yearMax.value}`},
-        {"calculate": "datum.shape ? lower(datum.shape) : ''", "as": "_shape"},
-        {"filter": shapeSel.value === 'All' ? "true" : `datum._shape == '${shapeSel.value}'`}
-      ];
-    }
-
-    async function renderMap(){
-      const spec = {
-        $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-        width: 600, height: 360,
-        data: {url: 'ufo_cities.csv'},
-        transform: [
-          ...filtersFor('cities')
-        ],
-        projection: {type: 'equalEarth'},
-        mark: {type: 'circle', tooltip: true, opacity: 0.8, stroke: '#11131a', strokeWidth: 0.5},
-        encoding: {
-          longitude: {field: 'longitude', type: 'quantitative'},
-          latitude: {field: 'latitude', type: 'quantitative'},
-          size: {field: 'count', type: 'quantitative', legend: {title: 'Reports'}, scale: {type: 'sqrt', range: [10, 800]}},
-          color: {field: 'count', type: 'quantitative', legend: {title: 'Reports'}},
-          tooltip: [
-            {field: 'city', title: 'City'},
-            {field: 'state', title: 'State'},
-            {field: 'country', title: 'Country'},
-            {field: 'count', title: 'Total reports', type: 'quantitative'}
-          ]
-        }
-      };
-      await vegaEmbed('#map', spec, {actions:false});
-    }
+    // Helper to read semicolon-delimited CSVs
+    const dataSemicolon = (url) => ({ url, format: { type: 'csv', delimiter: ';' } });
 
     async function renderMonthly(){
       const spec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
         width: 560, height: 320,
-        data: {url: 'ufo_monthly.csv'},
-        transform: [
-          ...filtersFor('monthly')
-        ],
-        layer: [
-          {
-            mark: {type:'area', line:true, opacity:0.25},
-            encoding: {
-              x: {field:'month', type:'temporal', title:'Month'},
-              y: {field:'count', type:'quantitative', title:'Sightings'},
-              tooltip: [{field:'month', type:'temporal'},{field:'count', type:'quantitative'}]
-            }
-          },
-          {
-            mark: {type:'rule'},
-            encoding: {
-              x: {field:'month', type:'temporal'},
-              y: {aggregate:'mean', field:'count'},
-              color: {value:'#888'},
-              size: {value:1}
-            }
-          }
-        ]
+        data: dataSemicolon('ufo_monthly.csv'),
+        mark: {type:'area', line:true, tooltip:true, opacity:0.25},
+        encoding: {
+          x: {field:'month', type:'temporal', title:'Month'},
+          y: {field:'count', type:'quantitative', title:'Sightings'}
+        }
       };
-      await vegaEmbed('#monthly', spec, {actions:false});
+      return vegaEmbed('#monthly', spec, {actions:false});
     }
 
-    async function renderShapes(){
-      // Filter-aware: we will load cities to recompute shape counts client-side for consistency
+    async function renderCities(){
       const spec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
-        width: 560, height: 320,
-        data: {url: 'ufo_cities.csv'},
+        width: 560, height: 360,
+        data: dataSemicolon('ufo_cities.csv'),
         transform: [
-          ...filtersFor('cities'),
-          {aggregate: [{op:'sum', field:'count', as:'count'}], groupby:['shape']},
-          {calculate: 'lower(datum.shape)', as: 'shape_lc'}
+          { calculate: 'trim(datum.city)', as: 'cityClean' },
+          { filter: 'isValid(datum.count)' },
+          { calculate: 'toNumber(datum.count)', as: 'c' },
+          { window: [{op:'rank', as:'rank'}], sort:[{field:'c', order:'descending'}] },
+          { filter: 'datum.rank <= 20' } // top 20 cities
         ],
         mark: {type:'bar', tooltip:true},
         encoding: {
-          x: {field:'count', type:'quantitative', title:'Reports'},
-          y: {field:'shape_lc', type:'nominal', sort:'-x', title:'Shape'},
-          tooltip: [
-            {field:'shape_lc', title:'Shape'},
-            {field:'count', type:'quantitative'}
-          ]
+          y: {field:'cityClean', type:'nominal', sort:'-x', title:'City'},
+          x: {field:'c', type:'quantitative', title:'Reports'},
+          tooltip:[{field:'cityClean', title:'City'},{field:'c', title:'Reports', type:'quantitative'}]
         }
       };
-      await vegaEmbed('#shapes', spec, {actions:false});
+      return vegaEmbed('#cities', spec, {actions:false});
+    }
+
+    async function renderShapes(){
+      const spec = {
+        $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+        width: 560, height: 320,
+        data: dataSemicolon('ufo_shape.csv'),
+        transform: [
+          { calculate: 'lower(trim(datum.shape))', as: 'shape_lc' },
+          { calculate: 'toNumber(datum.count)', as: 'c' }
+        ],
+        mark: {type:'bar', tooltip:true},
+        encoding: {
+          y: {field:'shape_lc', type:'nominal', sort:'-x', title:'Shape'},
+          x: {field:'c', type:'quantitative', title:'Reports'},
+          tooltip:[{field:'shape_lc', title:'Shape'},{field:'c', title:'Reports', type:'quantitative'}]
+        }
+      };
+      return vegaEmbed('#shapes', spec, {actions:false});
     }
 
     async function renderHourly(){
       const spec = {
         $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
         width: 560, height: 320,
-        data: {url: 'ufo_hourly.csv'},
+        data: dataSemicolon('ufo_hourly.csv'),
         transform: [
-          // Expect columns: weekday (0-6 or Mon..Sun), hour (0-23), count
-          {calculate: "toNumber(datum.hour)", as: "h"},
-          {calculate: "datum.weekday", as: "w"},
-          {calculate: "datum.count == null ? 0 : toNumber(datum.count)", as: "c"}
+          { calculate: 'toNumber(datum.hour)', as:'h' },
+          { calculate: 'toNumber(datum.count)', as:'c' }
         ],
-        mark: 'rect',
+        mark: {type:'bar', tooltip:true},
         encoding: {
-          x: {field:'h', type:'ordinal', title:'Hour', sort:'ascending'},
-          y: {field:'w', type:'ordinal', title:'Weekday'},
-          color: {field:'c', type:'quantitative', title:'Reports'},
-          tooltip: [
-            {field:'w', title:'Weekday'},
-            {field:'h', title:'Hour'},
-            {field:'c', title:'Reports', type:'quantitative'}
-          ]
+          x: {field:'h', type:'ordinal', title:'Hour (0-23)', sort:'ascending'},
+          y: {field:'c', type:'quantitative', title:'Reports'}
         }
       };
-      await vegaEmbed('#hourly', spec, {actions:false});
+      return vegaEmbed('#hourly', spec, {actions:false});
     }
 
-    async function renderAll(){
-      await Promise.all([renderMap(), renderMonthly(), renderShapes(), renderHourly()]);
+    async function renderYearly(){
+      const spec = {
+        $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+        width: 560, height: 320,
+        data: dataSemicolon('ufo_year.csv'),
+        transform: [ { calculate: 'toNumber(datum.year)', as:'y' }, { calculate: 'toNumber(datum.count)', as:'c' } ],
+        mark: {type:'line', point:true, tooltip:true},
+        encoding: {
+          x: {field:'y', type:'quantitative', title:'Year'},
+          y: {field:'c', type:'quantitative', title:'Sightings'}
+        }
+      };
+      return vegaEmbed('#yearly', spec, {actions:false});
     }
 
-    renderAll();
+    async function renderDay(){
+      const spec = {
+        $schema: 'https://vega.github.io/schema/vega-lite/v5.json',
+        width: 560, height: 320,
+        data: dataSemicolon('ufo_day.csv'),
+        transform: [ { calculate: 'toNumber(datum.day)', as:'d' }, { calculate: 'toNumber(datum.count)', as:'c' } ],
+        mark: {type:'area', line:true, tooltip:true, opacity:0.2},
+        encoding: {
+          x: {field:'d', type:'quantitative', title:'Day'},
+          y: {field:'c', type:'quantitative', title:'Reports'}
+        }
+      };
+      return vegaEmbed('#day', spec, {actions:false});
+    }
+
+    Promise.all([
+      renderMonthly(), renderCities(), renderShapes(), renderHourly(), renderYearly(), renderDay()
+    ]);
   </script>
 </body>
 </html>
