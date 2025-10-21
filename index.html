@@ -45,12 +45,14 @@
 
   <script>
     // Data sources (root folder)
-    const SRC = {
-      cities:  "ufo_cities_latlon.csv",  // comma CSV
-      monthly: "ufo_monthly.csv",        // semicolon CSV
-      shapes:  "ufo_shape.csv",          // semicolon CSV
-      hourly:  "ufo_hourly.csv"          // semicolon CSV
-    };
+    const DATA = {
+  cities:  "data/ufo_cities_latlon.csv",
+  hour:    "data/ufo_hourly.csv",
+  monthly: "data/ufo_monthly.csv",
+  shapes:  "data/ufo_shape.csv",
+  year:    "data/ufo_year.csv"
+};
+
 
     // Helpers
     const dataComma = (url) => ({ url, format: { type: 'csv', delimiter: ',' } });
