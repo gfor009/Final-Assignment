@@ -9,7 +9,7 @@
 <script src="https://unpkg.com/vega-embed@6"></script>
 <style>
   body{margin:0;background:#0f172a;color:#e5e7eb;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .container{max-width:1200px;margin:auto;padding:24px}
+  .container{max-width:1220px;margin:auto;padding:24px}
   h1{margin:0 0 8px}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .card{background:#0b1220;border:1px solid #1f2937;border-radius:14px;padding:12px}
@@ -26,21 +26,29 @@
   <p>This page auto-finds your CSVs in <code>/data</code> or the repo root, and shows a badge with what it loaded.</p>
 
   <div class="grid">
-    <div class="card">
-      <h2>Top cities (bar chart) <span id="b-cities" class="badge">checking…</span></h2>
-      <div id="cities" class="viz"></div>
+    <div class="card" style="grid-column:1/-1">
+      <h2>US city hotspots (map) <span id="b-map" class="badge">checking…</span></h2>
+      <div id="map" class="viz" style="min-height:420px"></div>
     </div>
+
     <div class="card">
-      <h2>Monthly trend <span id="b-monthly" class="badge">checking…</span></h2>
+      <h2>Monthly trend (line+area) <span id="b-monthly" class="badge">checking…</span></h2>
       <div id="monthly" class="viz"></div>
     </div>
+
+    <div class="card">
+      <h2>Hourly rhythm (radial donut) <span id="b-hourly" class="badge">checking…</span></h2>
+      <div id="hourly" class="viz"></div>
+    </div>
+
+    <div class="card">
+      <h2>Top cities (bar) <span id="b-cities" class="badge">checking…</span></h2>
+      <div id="cities" class="viz"></div>
+    </div>
+
     <div class="card">
       <h2>Shapes (overall) <span id="b-shapes" class="badge">checking…</span></h2>
       <div id="shapes" class="viz"></div>
-    </div>
-    <div class="card">
-      <h2>Sightings by hour <span id="b-hourly" class="badge">checking…</span></h2>
-      <div id="hourly" class="viz"></div>
     </div>
   </div>
 </div>
@@ -48,10 +56,13 @@
 <script>
 /* ---------- Paths & helpers ---------- */
 const PATHS = {
-  cities:  ["data/ufo_cities.csv", "ufo_cities.csv"],          // city;count
-  monthly: ["data/ufo_monthly.csv","ufo_monthly.csv"],         // month;count
-  shapes:  ["data/ufo_shape.csv",  "ufo_shape.csv"],           // shape;count
-  hourly:  ["data/ufo_hourly.csv", "ufo_hourly.csv"]           // hour;count
+  // MAP needs LAT/LON
+  citiesLatLon: ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"], // city,state,country,latitude,longitude,count (comma CSV)
+  // Aggregates (semicolon CSV)
+  cities:  ["data/ufo_cities.csv","ufo_cities.csv"],        // city;count
+  monthly: ["data/ufo_monthly.csv","ufo_monthly.csv"],      // month;count
+  shapes:  ["data/ufo_shape.csv","ufo_shape.csv"],          // shape;count
+  hourly:  ["data/ufo_hourly.csv","ufo_hourly.csv"]         // hour;count
 };
 
 // Try multiple URLs (data/ then root), add cache-buster
@@ -69,10 +80,10 @@ async function fetchFirst(paths){
   throw lastErr || new Error("All paths failed");
 }
 
-// Semicolon CSV -> array of objects
+// Parsers
 function parseSemi(text){
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
+  if(lines.length<2) return [];
   const headers = lines[0].split(";").map(h=>h.trim());
   return lines.slice(1).map(line=>{
     const cells = line.split(";");
@@ -81,128 +92,201 @@ function parseSemi(text){
     return row;
   });
 }
+function parseComma(text){
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if(lines.length<2) return [];
+  const headers = lines[0].split(",").map(h=>h.trim());
+  return lines.slice(1).map(line=>{
+    const cells = line.split(",");
+    const row = {};
+    headers.forEach((h,i)=> row[h] = (cells[i]??"").trim());
+    return row;
+  });
+}
 
 function setBadge(id, msg, ok=true){
   const el = document.getElementById(id);
-  if(!el) return;
-  el.textContent = msg;
-  el.className = "badge" + (ok ? "" : " err");
+  if(!el) return; el.textContent = msg; el.className = "badge" + (ok ? "" : " err");
 }
 
-/* ---------- Renderers ---------- */
+// Extract YYYY-MM from almost any date string (e.g. 1990-01-01, 1/1/1990, 1990.01)
+function ymKey(s){
+  const m = String(s||"").match(/(\d{4}).*?(\d{1,2})/); // year + month
+  if(!m) return null;
+  const yyyy = m[1], mm = m[2].padStart(2,"0");
+  return `${yyyy}-${mm}`;
+}
+</script>
 
-// 1) Top Cities (city;count)
-async function renderCities(){
+<script>
+// 1) MAP (needs ufo_cities_latlon.csv with commas)
+async function renderMap(){
   try{
-    const {url,text} = await fetchFirst(PATHS.cities);
-    const rows = parseSemi(text);
-    const values = rows
-      .map(r => ({ city: (r.city||"").toLowerCase().trim(), count: +r.count }))
-      .filter(r => r.city && Number.isFinite(r.count))
-      .sort((a,b)=> b.count - a.count)
-      .slice(0,30);
-    setBadge("b-cities", `loaded ${values.length} rows from ${url}`);
+    const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
+                   format:{ type:'topojson', feature:'states' } };
+    const {url,text} = await fetchFirst(PATHS.citiesLatLon);
+    const rows = parseComma(text);
+    const values = rows.map(r => ({
+      city:(r.city||'').trim(),
+      state:(r.state||'').trim(),
+      lat: +String(r.latitude).replace(',', '.'),
+      lon: +String(r.longitude).replace(',', '.'),
+      count:+String(r.count).replace(/[, ]/g,'')
+    })).filter(d => isFinite(d.lat)&&isFinite(d.lon)&&isFinite(d.count) &&
+                    d.lon>=-180&&d.lon<=180 && d.lat>=-90&&d.lat<=90);
+
+    setBadge("b-map", `loaded ${values.length} rows from ${url}`);
     const spec = {
-      $schema:"https://vega.github.io/schema/vega-lite/v5.json",
-      width:560,height:340,
-      data:{ values },
-      mark:{ type:"bar", tooltip:true },
-      encoding:{
-        y:{ field:"city", type:"nominal", sort:"-x", title:"City" },
-        x:{ field:"count", type:"quantitative", title:"Reports" },
-        tooltip:[{field:"city",title:"City"},{field:"count",type:"quantitative",title:"Reports"}]
-      }
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width: 1180, height: 420,
+      projection: { type:'albersUsa' },
+      layer: [
+        { data: topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#1f2937' } },
+        {
+          data:{ values },
+          mark:{ type:'circle', tooltip:true, opacity:0.9, stroke:'#0b1220', strokeWidth:0.6 },
+          encoding:{
+            longitude:{ field:'lon', type:'quantitative' },
+            latitude:{ field:'lat', type:'quantitative' },
+            size:{ field:'count', type:'quantitative', title:'Sightings', scale:{ type:'sqrt', range:[10,1600] } },
+            color:{ value:'#38bdf8' },
+            tooltip:[
+              {field:'city', title:'City'},
+              {field:'state', title:'State'},
+              {field:'count', type:'quantitative', title:'Reports'},
+              {field:'lat', title:'lat'},{field:'lon', title:'lon'}
+            ]
+          }
+        }
+      ],
+      config:{ background:null }
     };
-    return vegaEmbed("#cities", spec, {actions:false});
+    return vegaEmbed('#map', spec, {actions:false});
   }catch(e){
-    console.error("Cities load error:", e);
-    setBadge("b-cities", "failed to load", false);
+    console.error('Map load error:', e);
+    setBadge('b-map','missing ufo_cities_latlon.csv', false);
+    // Show a friendly placeholder
+    document.getElementById('map').innerHTML =
+      '<p style="opacity:.7">Map needs <code>ufo_cities_latlon.csv</code> with columns: city,state,country,latitude,longitude,count (comma-CSV). Place it in <code>/data</code> or repo root.</p>';
   }
 }
 
-// 2) Monthly (month;count)
+// 2) MONTHLY (line+area) — robust YYYY-MM parsing (works even if full dates are weird)
 async function renderMonthly(){
   try{
     const {url,text} = await fetchFirst(PATHS.monthly);
     const rows = parseSemi(text);
     const values = rows.map(r=>{
-      // allow 1990-01-01 or 1/1/1990
-      const s = (r.month||"").replace(/\./g,"-").replace(/\//g,"-");
-      const d = new Date(s);
-      return { month:d, count:+r.count };
-    }).filter(r => !isNaN(r.month.getTime()) && Number.isFinite(r.count));
+      const ym = ymKey(r.month);
+      const cnt = +String(r.count).replace(/[, ]/g,'');
+      return ym ? { date:new Date(ym+'-01'), count:cnt } : null;
+    }).filter(d => d && isFinite(d.count));
+
     setBadge("b-monthly", `loaded ${values.length} rows from ${url}`);
     const spec = {
-      $schema:"https://vega.github.io/schema/vega-lite/v5.json",
-      width:560,height:340,
-      data:{ values },
-      mark:{ type:"line", point:true },
-      encoding:{
-        x:{ field:"month", type:"temporal", title:"Month" },
-        y:{ field:"count", type:"quantitative", title:"Sightings" },
-        color:{ value:"#38bdf8" }
-      }
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width: 560, height: 340,
+      data: { values },
+      layer:[
+        { mark:{ type:'area', opacity:0.15, color:'#38bdf8' },
+          encoding:{ x:{field:'date',type:'temporal',title:'Month'}, y:{field:'count',type:'quantitative',title:'Sightings'} } },
+        { mark:{ type:'line', color:'#38bdf8' },
+          encoding:{ x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'} } },
+        { mark:{ type:'point', color:'#38bdf8' },
+          encoding:{ x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'}, tooltip:[{field:'date',type:'temporal'},{field:'count',type:'quantitative'}] } }
+      ]
     };
-    return vegaEmbed("#monthly", spec, {actions:false});
+    return vegaEmbed('#monthly', spec, {actions:false});
   }catch(e){
-    console.error("Monthly load error:", e);
-    setBadge("b-monthly", "failed to load", false);
+    console.error('Monthly load error:', e);
+    setBadge('b-monthly','failed to load', false);
   }
 }
 
-// 3) Shapes (shape;count)
-async function renderShapes(){
-  try{
-    const {url,text} = await fetchFirst(PATHS.shapes);
-    const rows = parseSemi(text);
-    const values = rows
-      .map(r => ({ shape:(r.shape||"").toLowerCase().trim(), count:+r.count }))
-      .filter(r => r.shape && Number.isFinite(r.count));
-    setBadge("b-shapes", `loaded ${values.length} rows from ${url}`);
-    const spec = {
-      $schema:"https://vega.github.io/schema/vega-lite/v5.json",
-      width:560,height:340,
-      data:{ values },
-      mark:{ type:"bar", tooltip:true },
-      encoding:{
-        y:{ field:"shape", type:"nominal", sort:"-x", title:"Shape" },
-        x:{ field:"count", type:"quantitative", title:"Reports" }
-      }
-    };
-    return vegaEmbed("#shapes", spec, {actions:false});
-  }catch(e){
-    console.error("Shapes load error:", e);
-    setBadge("b-shapes", "failed to load", false);
-  }
-}
-
-// 4) Hourly (hour;count)
+// 3) HOURLY (radial donut)
 async function renderHourly(){
   try{
     const {url,text} = await fetchFirst(PATHS.hourly);
     const rows = parseSemi(text);
-    const values = rows
-      .map(r => ({ hour:+r.hour, count:+r.count }))
-      .filter(r => Number.isFinite(r.hour) && Number.isFinite(r.count));
+    const values = rows.map(r=>({ hour:+r.hour, count:+String(r.count).replace(/[, ]/g,'') }))
+                       .filter(d=>isFinite(d.hour)&&isFinite(d.count));
+
     setBadge("b-hourly", `loaded ${values.length} rows from ${url}`);
     const spec = {
-      $schema:"https://vega.github.io/schema/vega-lite/v5.json",
-      width:560,height:340,
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:560, height:340,
       data:{ values },
-      mark:{ type:"bar", tooltip:true },
+      transform:[ { calculate:'format(datum.hour, "02")', as:'hlabel' } ],
+      mark:{ type:'arc', innerRadius:90, stroke:'#0b1220' },
       encoding:{
-        x:{ field:"hour", type:"ordinal", title:"Hour (0–23)", sort:"ascending" },
-        y:{ field:"count", type:"quantitative", title:"Reports" }
-      }
+        theta:{ field:'count', type:'quantitative', stack:true, title:'Reports' },
+        color:{ field:'hlabel', type:'nominal', legend:{title:'Hour (00–23)', orient:'bottom', columns:6, labelLimit:160} },
+        tooltip:[ {field:'hour',title:'Hour'}, {field:'count',type:'quantitative'} ]
+      },
+      config:{ legend:{orient:'bottom'} }
     };
-    return vegaEmbed("#hourly", spec, {actions:false});
+    return vegaEmbed('#hourly', spec, {actions:false});
   }catch(e){
-    console.error("Hourly load error:", e);
-    setBadge("b-hourly", "failed to load", false);
+    console.error('Hourly load error:', e);
+    setBadge('b-hourly','failed to load', false);
   }
 }
 
-Promise.all([renderCities(), renderMonthly(), renderShapes(), renderHourly()]);
+// 4) TOP CITIES (bar) — uses city;count (no lat/lon)
+async function renderCities(){
+  try{
+    const {url,text} = await fetchFirst(PATHS.cities);
+    const rows = parseSemi(text);
+    const values = rows.map(r=>({ city:(r.city||'').toLowerCase().trim(), count:+String(r.count).replace(/[, ]/g,'') }))
+                       .filter(r=>r.city && isFinite(r.count))
+                       .sort((a,b)=>b.count-a.count)
+                       .slice(0,30);
+
+    setBadge("b-cities", `loaded ${values.length} rows from ${url}`);
+    const spec = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:560, height:340,
+      data:{ values },
+      mark:{ type:'bar', tooltip:true },
+      encoding:{
+        y:{ field:'city', type:'nominal', sort:'-x', title:'City' },
+        x:{ field:'count', type:'quantitative', title:'Reports' }
+      }
+    };
+    return vegaEmbed('#cities', spec, {actions:false});
+  }catch(e){
+    console.error('Cities load error:', e);
+    setBadge('b-cities','failed to load', false);
+  }
+}
+
+// 5) SHAPES (bar)
+async function renderShapes(){
+  try{
+    const {url,text} = await fetchFirst(PATHS.shapes);
+    const rows = parseSemi(text);
+    const values = rows.map(r=>({ shape:(r.shape||'').toLowerCase().trim(), count:+String(r.count).replace(/[, ]/g,'') }))
+                       .filter(r=>r.shape && isFinite(r.count));
+
+    setBadge("b-shapes", `loaded ${values.length} rows from ${url}`);
+    const spec = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:560, height:340,
+      data:{ values },
+      mark:{ type:'bar', tooltip:true },
+      encoding:{
+        y:{ field:'shape', type:'nominal', sort:'-x', title:'Shape' },
+        x:{ field:'count', type:'quantitative', title:'Reports' }
+      }
+    };
+    return vegaEmbed('#shapes', spec, {actions:false});
+  }catch(e){
+    console.error('Shapes load error:', e);
+    setBadge('b-shapes','failed to load', false);
+  }
+}
+
+Promise.all([renderMap(), renderMonthly(), renderHourly(), renderCities(), renderShapes()]);
 </script>
 </body>
 </html>
