@@ -228,43 +228,94 @@ async function renderHeat(){
 }
 
 /* ---------- 3) MONTHLY trend ---------- */
+<script>
 async function renderMonthly(){
+  // helpers
+  const smartInt = (s) => {
+    const t = String(s ?? '').trim();
+    if (/^\d{1,3}([.,\s]\d{3})+$/.test(t)) return Number(t.replace(/[.,\s]/g,''));
+    return Number(t.replace(/[,\s]/g,''));
+  };
+  const ymKey = (s) => {
+    const str = String(s||'').trim();
+    // try direct YYYY-MM first
+    let m = str.match(/^\s*(\d{4})[-\/. ]?(\d{1,2})\s*$/);
+    if (m) return `${m[1]}-${m[2].padStart(2,'0')}`;
+    // try "YYYY ... MM" anywhere
+    m = str.match(/(\d{4}).*?(\d{1,2})/);
+    if (m) return `${m[1]}-${m[2].padStart(2,'0')}`;
+    // try "Mon YYYY"
+    const monthNames = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    const m2 = str.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b.*?(\d{4})/i);
+    if (m2) return `${m2[2]}-${String(monthNames[m2[1].toLowerCase()]).padStart(2,'0')}`;
+    return null;
+  };
+
   try{
-    const {url,text} = await fetchFirst(PATHS.monthly);
-    const rows = text.trim().split(/\r?\n/).map(r=>r.split(";"));
+    // load from /data or root
+    const tryPaths = ["data/ufo_monthly.csv","ufo_monthly.csv"];
+    let text=null, src=null;
+    for(const p of tryPaths){
+      const r = await fetch(p + "?v=" + Date.now());
+      if (r.ok){ text = await r.text(); src=p; break; }
+    }
+    if (!text) throw new Error("ufo_monthly.csv not found");
+
+    // delimiter detection (semicolon is common in your files)
+    const firstLine = text.split(/\r?\n/)[0] || '';
+    const delim = firstLine.includes(';') ? ';' : ',';
+
+    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
-    const iM = head.indexOf("month"), iC = head.indexOf("count");
+
+    const idx = (names)=>{ for(const n of names){ const i=head.indexOf(n); if(i>=0) return i; } return -1; };
+    const iM = idx(['month','date']);     // accept month OR date
+    const iC = idx(['count','total','value','sightings']);
+
+    if (iM < 0 || iC < 0) throw new Error("Headers must include a month/date column and a count/total/value/sightings column.");
+
     const values = rows.map(c=>{
-      const ym = ymKey(c[iM]); const cnt = smartInt(c[iC]);
-      return ym ? { date:new Date(ym + "-01"), count:cnt } : null;
+      const ym = ymKey(c[iM]);
+      const cnt = smartInt(c[iC]);
+      return ym && isFinite(cnt) ? { date:new Date(ym + "-01"), count:cnt } : null;
     }).filter(Boolean);
 
-    setBadge("b-monthly", `loaded ${values.length} rows from ${url}`);
+    const badge = document.getElementById("b-monthly");
+    if (badge) { badge.textContent = `loaded ${values.length} rows from ${src}`; badge.className = "badge"; }
+
+    if (!values.length){
+      // Render a friendly placeholder so the page doesn’t look broken
+      document.getElementById('monthly').innerHTML =
+        '<p style="opacity:.75">No valid rows parsed. Check that <code>ufo_monthly.csv</code> has a month/date column and a numeric count column.</p>';
+      return;
+    }
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:560, height:340,
       data:{ values },
       layer:[
-        { mark:{ type:'area', opacity:0.15, color:varBlue() },
+        { mark:{ type:'area', opacity:0.15, color:'#38bdf8' },
           encoding:{ x:{field:'date',type:'temporal',title:'Month'},
                      y:{field:'count',type:'quantitative',title:'Sightings'} } },
-        { mark:{ type:'line', color:varBlue() },
+        { mark:{ type:'line', color:'#38bdf8' },
           encoding:{ x:{field:'date',type:'temporal'},
                      y:{field:'count',type:'quantitative'} } },
-        { mark:{ type:'point', color:varBlue() },
+        { mark:{ type:'point', color:'#38bdf8' },
           encoding:{ x:{field:'date',type:'temporal'},
                      y:{field:'count',type:'quantitative'},
                      tooltip:[{field:'date',type:'temporal'},{field:'count',type:'quantitative'}] } }
       ],
       config:{ background:null }
     };
-    await vegaEmbed('#monthly', spec, {actions:false});
+    vegaEmbed('#monthly', spec, {actions:false});
   }catch(e){
-    console.error('Monthly error:', e);
-    setBadge('b-monthly','failed to load', false);
+    console.error('Monthly load error:', e);
+    const b=document.getElementById('b-monthly'); if(b){ b.textContent='failed to load'; b.className='badge err'; }
   }
 }
+</script>
+
 
 /* ---------- 4) HOURLY donut ---------- */
 async function renderHourly(){
