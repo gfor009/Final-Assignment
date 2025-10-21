@@ -21,12 +21,12 @@
 <body>
   <div class="container">
     <h1>UFO Sightings Explorer — USA Focus</h1>
-    <p>Make sure your CSVs sit next to this file and have the headers listed in the instructions.</p>
+    <p>CSV files must live in the <code>/data</code> folder next to this file.</p>
 
     <div class="grid">
       <div class="card">
-        <h2>Top US cities (symbol map)</h2>
-        <div id="map" class="viz"></div>
+        <h2>Top cities (bar chart)</h2>
+        <div id="cities" class="viz"></div>
       </div>
       <div class="card">
         <h2>Monthly trend</h2>
@@ -44,60 +44,41 @@
   </div>
 
   <script>
-    // Data sources (root folder)
-    const DATA = {
-  cities:  "data/ufo_cities_latlon.csv",
-  hour:    "data/ufo_hourly.csv",
-  monthly: "data/ufo_monthly.csv",
-  shapes:  "data/ufo_shape.csv",
-  year:    "data/ufo_year.csv"
-};
-
-
-    // Helpers
-    const dataComma = (url) => ({ url, format: { type: 'csv', delimiter: ',' } });
-    const dataSemi  = (url) => ({ url, format: { type: 'csv', delimiter: ';' } });
-
-    // ---- 1) MAP (cities, comma CSV) ----
-    const mapSpec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: 560, height: 340,
-      projection: { type: "albersUsa" },
-      layer: [
-        {
-          data: { url: "https://vega.github.io/vega-datasets/data/us-10m.json",
-                  format: { type: "topojson", feature: "states" } },
-          mark: { type: "geoshape", fill: "#0a1120", stroke: "#1f2937" }
-        },
-        {
-          data: dataComma(SRC.cities),
-          transform: [
-            { calculate: "toNumber(datum.latitude)",  as: "lat" },
-            { calculate: "toNumber(datum.longitude)", as: "lon" },
-            { calculate: "toNumber(datum.count)",     as: "cnt" },
-            { filter: "isValid(datum.lat) && isValid(datum.lon) && isValid(datum.cnt)" },
-            { filter: "datum.lon >= -130 && datum.lon <= -60 && datum.lat >= 22 && datum.lat <= 50" }
-          ],
-          mark: { type: "circle", tooltip: true, opacity: 0.85, stroke: "#0b1220", strokeWidth: 0.6 },
-          encoding: {
-            longitude: { field: "lon", type: "quantitative" },
-            latitude:  { field: "lat", type: "quantitative" },
-            size:  { field: "cnt", type: "quantitative", legend: { title: "Reports" },
-                     scale: { type: "sqrt", range: [20, 1200] } },
-            color: { value: "#38bdf8" },
-            tooltip: [
-              { field: "city", title: "City" },
-              { field: "state", title: "State" },
-              { field: "country", title: "Country" },
-              { field: "cnt", title: "Reports", type: "quantitative" }
-            ]
-          }
-        }
-      ],
-      config: { background: null }
+    // ---- Define your data paths (this was missing) ----
+    const SRC = {
+      cities:  "data/ufo_cities.csv",    // expects: city;count   (semicolon CSV)
+      monthly: "data/ufo_monthly.csv",   // expects: month;count  (semicolon CSV)
+      shapes:  "data/ufo_shape.csv",     // expects: shape;count  (semicolon CSV)
+      hourly:  "data/ufo_hourly.csv"     // expects: hour;count   (semicolon CSV)
     };
 
-    // ---- 2) MONTHLY (semicolon CSV) ----
+    // CSV loaders with explicit delimiters
+    const dataSemi  = (url) => ({ url, format: { type: 'csv', delimiter: ';' } });
+
+    // ---- 1) Top Cities (uses data/ufo_cities.csv) ----
+    const citiesSpec = {
+      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      width: 560, height: 340,
+      data: dataSemi(SRC.cities),
+      transform: [
+        { calculate: "lower(trim(datum.city))", as: "city_clean" },
+        { calculate: "toNumber(datum.count)", as: "c" },
+        { filter: "isFinite(datum.c)" },
+        { window: [{op:'rank', as:'r'}], sort:[{field:'c', order:'descending'}] },
+        { filter: "datum.r <= 30" } // Top 30 cities
+      ],
+      mark: { type: "bar", tooltip: true },
+      encoding: {
+        y: { field: "city_clean", type: "nominal", sort: "-x", title: "City" },
+        x: { field: "c", type: "quantitative", title: "Reports" },
+        tooltip: [
+          { field: "city_clean", title: "City" },
+          { field: "c", type: "quantitative", title: "Reports" }
+        ]
+      }
+    };
+
+    // ---- 2) Monthly (data/ufo_monthly.csv) ----
     const monthlySpec = {
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
       width: 560, height: 340,
@@ -119,7 +100,7 @@
       }
     };
 
-    // ---- 3) SHAPES (semicolon CSV) ----
+    // ---- 3) Shapes (data/ufo_shape.csv) ----
     const shapesSpec = {
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
       width: 560, height: 340,
@@ -136,7 +117,7 @@
       }
     };
 
-    // ---- 4) HOURLY (semicolon CSV) ----
+    // ---- 4) Hourly (data/ufo_hourly.csv) ----
     const hourlySpec = {
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
       width: 560, height: 340,
@@ -153,11 +134,11 @@
       }
     };
 
-    // Render all (and log helpful errors)
-    vegaEmbed("#map",     mapSpec,     {actions:false}).catch(e=>console.error("MAP error:", e));
-    vegaEmbed("#monthly", monthlySpec, {actions:false}).catch(e=>console.error("MONTHLY error:", e));
-    vegaEmbed("#shapes",  shapesSpec,  {actions:false}).catch(e=>console.error("SHAPES error:", e));
-    vegaEmbed("#hourly",  hourlySpec,  {actions:false}).catch(e=>console.error("HOURLY error:", e));
+    // Render
+    vegaEmbed("#cities",  citiesSpec,  {actions:false}).catch(e=>console.error("Cities error:", e));
+    vegaEmbed("#monthly", monthlySpec, {actions:false}).catch(e=>console.error("Monthly error:", e));
+    vegaEmbed("#shapes",  shapesSpec,  {actions:false}).catch(e=>console.error("Shapes error:", e));
+    vegaEmbed("#hourly",  hourlySpec,  {actions:false}).catch(e=>console.error("Hourly error:", e));
   </script>
 </body>
 </html>
