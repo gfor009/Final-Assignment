@@ -36,9 +36,10 @@
 
     <!-- B) CITY BUBBLE MAP (from ufo_cities_latlon.csv) -->
     <div class="card wide">
-      <h2>City hotspots (top 300 bubbles) <span id="b-citiesmap" class="badge">checking…</span></h2>
-      <div id="citiesmap" class="viz" style="min-height:420px"></div>
-    </div>
+  <h2>UFO sightings by city (top 300 hotspots)</h2>
+  <div id="citiesmap" class="viz" style="min-height:420px"></div>
+  <p id="citiesmap-desc" style="opacity:.9;margin:.5rem 0 0"></p>
+</div>
 
     <!-- Other charts -->
     <div class="card">
@@ -225,39 +226,65 @@ async function renderMapFromCities(){
                    format:{ type:'topojson', feature:'states' } };
 
     const {url, text} = await fetchFirst(PATHS.citiesLatLon);
-    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';') ? ';' : ',';
+    const first = (text.split(/\r?\n/)[0]||''); 
+    const delim = first.includes(';') ? ';' : ',';
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const pick = (...names)=> names.map(n=>head.indexOf(n)).find(i=>i>=0);
-    const iCity = pick('city'); const iState = pick('state','region');
-    const iCountry = pick('country'); const iLat = pick('latitude','lat');
-    const iLon = pick('longitude','lon','lng','long'); const iCnt = pick('count','sightings','total','value');
+
+    const iCity = pick('city');
+    const iState = pick('state','region');
+    const iCountry = pick('country');
+    const iLat = pick('latitude','lat');
+    const iLon = pick('longitude','lon','lng','long');
+    const iCnt = pick('count','sightings','total','value');
     if ([iCity,iState,iCountry,iLat,iLon,iCnt].some(i=>i===undefined)) throw new Error('Missing columns');
 
+    // group duplicates city|state and sum counts
     const byKey = new Map();
     for (const r of rows){
-      const country = (r[iCountry]||'').trim().toLowerCase(); if (country !== 'us') continue;
-      const city = (r[iCity]||'').trim(); const state = (r[iState]||'').trim();
-      const lat = smartDeg((r[iLat]||'').replace(',', '.')); const lon = smartDeg((r[iLon]||'').replace(',', '.'));
+      if ((r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
+      const city = (r[iCity]||'').trim();
+      const state = (r[iState]||'').trim();
+      const lat = smartDeg((r[iLat]||'').replace(',', '.'));
+      const lon = smartDeg((r[iLon]||'').replace(',', '.'));
       const count = smartInt(r[iCnt]);
       if (!isFinite(lat)||!isFinite(lon)||!isFinite(count)) continue;
       if (lat < 18 || lat > 72 || lon > -60 || lon < -170) continue;
+
       const key = city.toLowerCase()+'|'+state.toLowerCase();
       const cur = byKey.get(key) || {city, state, latSum:0, lonSum:0, n:0, count:0};
-      cur.latSum += lat; cur.lonSum += lon; cur.n += 1; cur.count += count; byKey.set(key, cur);
+      cur.latSum += lat; cur.lonSum += lon; cur.n += 1; cur.count += count;
+      byKey.set(key, cur);
     }
-    let values = [...byKey.values()].map(d=>({city:d.city,state:d.state,lat:d.latSum/d.n,lon:d.lonSum/d.n,count:d.count}));
-    // Sort & keep top 300 for readability
-    values.sort((a,b)=>b.count-a.count); values = values.slice(0,300);
 
-    setBadge("b-citiesmap", `loaded top ${values.length} cities from ${url}`);
+    let values = [...byKey.values()].map(d=>({
+      city:d.city, state:d.state, lat:d.latSum/d.n, lon:d.lonSum/d.n, count:d.count
+    }));
+    values.sort((a,b)=>b.count-a.count);
+    values = values.slice(0, 300); // top 300 for readability
 
+    // write a short paragraph from the data (top cities)
+    const fmt = new Intl.NumberFormat('en-US').format;
+    const top5 = values.slice(0,5).map(d => `${d.city}, ${d.state} (${fmt(d.count)})`).join(', ');
+    const totalTop = values.reduce((s,d)=>s+d.count,0);
+    const desc = document.getElementById('citiesmap-desc');
+    if (desc) {
+      desc.textContent =
+        `Each bubble marks a city; bubble size encodes total reports. ` +
+        `This view shows the top 300 cities by sightings (covering ${fmt(totalTop)} reports). ` +
+        `Leaders include: ${top5}.`;
+    }
+
+    // cap bubble sizes at the 99th percentile (robust to outliers)
     const counts = values.map(d=>d.count).filter(n=>n>0).sort((a,b)=>a-b);
-    const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1; const domainMax = Math.max(1,q99);
+    const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1;
+    const domainMax = Math.max(1, q99);
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:1180, height:420, projection:{ type:'albersUsa' },
+      width:1180, height:420,
+      projection:{ type:'albersUsa' },
       layer:[
         { data: topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#98a0ab' } },
         { data:{ values },
@@ -266,21 +293,39 @@ async function renderMapFromCities(){
           encoding:{
             longitude:{ field:'lon', type:'quantitative' },
             latitude: { field:'lat', type:'quantitative' },
-            size:{ field:'count_capped', type:'quantitative',
-                   scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,800] },
-                   title:'Sightings (capped)' },
-            color:{ value:BLUE },
+            size:{
+              field:'count_capped', type:'quantitative',
+              scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,800] },
+              title:'City sightings',
+              legend:{
+                orient:'right',
+                format:',d',
+                labelColor:'#e5e7eb',   // white-ish labels on dark
+                titleColor:'#e5e7eb',
+                symbolStrokeColor:'#0b1220',
+                symbolStrokeWidth:0.6
+              }
+            },
+            color:{ value:'#38bdf8' },
             tooltip:[
-              {field:'city', title:'City'}, {field:'state', title:'State'},
-              {field:'count', type:'quantitative', title:'Reports'}
+              {field:'city', title:'City'},
+              {field:'state', title:'State'},
+              {field:'count', type:'quantitative', title:'Reports', format:',d'}
             ]
           }
         }
       ],
       config:{ background:null }
     };
+
     await vegaEmbed('#citiesmap', spec, {actions:false});
-  }catch(e){ console.error('Cities map error:', e); setBadge('b-citiesmap','failed to load', false); }
+
+    // if any old badge span exists, remove it
+    document.getElementById('b-citiesmap')?.remove();
+
+  }catch(e){
+    console.error('Cities map error:', e);
+  }
 }
 
 /* ---------- OTHER CHARTS (unchanged) ---------- */
