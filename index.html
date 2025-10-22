@@ -318,14 +318,16 @@ async function renderMapFromCities(){
     values = values.slice(0, 300);
 
     const fmt = new Intl.NumberFormat('en-US').format;
-    const top5 = values.slice(0,5).map(d => `${d.city}, ${d.state} (${fmt(d.count)})`).join(', ');
-    const totalTop = values.reduce((s,d)=>s+d.count,0);
-    const desc = document.getElementById('citiesmap-desc');
-    if (desc) {
-      desc.textContent =
-        `Each bubble marks a city; bubble size encodes total reports. ` +
-        `This view shows the top 300 cities by sightings (covering ${fmt(totalTop)} reports). Leaders include: ${top5}.`;
-    }
+const top5 = values.slice(0,5).map(d => `${d.city}, ${d.state} (${fmt(d.count)})`).join(', ');
+const totalTop = values.reduce((s,d)=>s+d.count,0);
+const desc = document.getElementById('citiesmap-desc');
+if (desc) {
+  desc.textContent =
+    `Each bubble marks a city; bubble size encodes total reports. The map highlights dense corridors ` +
+    `along the Northeast (D.C.–Boston), Florida, Southern California, and parts of the Great Lakes and Texas, ` +
+    `with sparser coverage across the Mountain West and northern Plains. This view shows the top 300 cities ` +
+    `(${fmt(totalTop)} reports). Leaders include: ${top5}.`;
+}
 
     const counts = values.map(d=>d.count).filter(n=>n>0).sort((a,b)=>a-b);
     const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1;
@@ -344,12 +346,25 @@ async function renderMapFromCities(){
             longitude:{ field:'lon', type:'quantitative' },
             latitude: { field:'lat', type:'quantitative' },
             size:{
-              field:'count_capped', type:'quantitative',
-              scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,800] },
-              title:'City sightings',
-              legend:{ orient:'right', format:',d', labelColor:'#e5e7eb', titleColor:'#e5e7eb',
-                       symbolStrokeColor:'#0b1220', symbolStrokeWidth:0.6 }
-            },
+  field:'count', type:'quantitative',
+  // Stronger difference between small/large bubbles:
+  // linear scale + a wide range, still clamped by the 99th-percentile cap you computed.
+  scale:{ type:'linear', domain:[0, domainMax], clamp:true, range:[40, 260] },
+  title:'City sightings',
+  legend:{
+    orient:'right',
+    // Show fewer, clearer reference steps (edit if you prefer)
+    values:[0,50,100,150,200,300],
+    format:',d',
+    labelColor:'#e5e7eb',
+    titleColor:'#e5e7eb',
+    labelFontSize:14,
+    titleFontSize:14,
+    symbolType:'circle',
+    symbolStrokeColor:'#0b1220',
+    symbolStrokeWidth:0.8
+  }
+},
             color:{ value: BLUE },
             tooltip:[ {field:'city', title:'City'}, {field:'state', title:'State'},
                       {field:'count', type:'quantitative', title:'Reports', format:',d'} ]
