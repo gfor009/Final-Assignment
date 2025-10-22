@@ -41,84 +41,66 @@
   header.hero h1{ margin:0 0 10px; font:700 28px/1.15 Oxanium, sans-serif; letter-spacing:.2px; }
   header.hero p{ margin:0; color:var(--muted) }
 
-  /* ===== Header layout: paragraph + KPIs side-by-side ===== */
-  .hero-grid{
-    display:grid;
-    grid-template-columns: minmax(0, 1fr) 380px; /* left: fluid paragraph, right: fixed KPI column */
-    gap: 16px;
-    align-items: start;
-  }
-  /* KPIs shown as a vertical stack in the right column */
-  .kpis{
-    display:grid;
-    grid-template-columns: 1fr;
-    gap: 12px;
-    margin: 0;               /* no extra margins so it aligns with the paragraph */
-  }
-  .kpi{
-    background:var(--panel); border:1px solid var(--grid); border-radius:14px;
-    padding:14px 16px; display:flex; flex-direction:column; gap:4px; width:100%;
-  }
-  .kpi-number{ font-size:28px; line-height:1; font-weight:800; letter-spacing:.3px }
-  .kpi-label{ font-size:12px; opacity:.85 }
-  /* Let the paragraph span the full left column width */
-  header.hero p.lede{ max-width:none; }
+  /* ===== Header: paragraph + KPIs aligned with cards ===== */
+.hero-grid{
+  /* Left column fixed for comfortable reading; right column fills to container edge.
+     The gap matches the card grid gap so sight-lines align. */
+  display:grid;
+  grid-template-columns: minmax(0, 720px) 1fr;  /* left = 720px, right = flexible */
+  gap: var(--gap-3);
+  align-items: start;
+}
 
-  /* Grid for content cards */
-  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:var(--gap-3) }
-  .wide{ grid-column:1 / -1 }
+/* Full width of left column, no artificial max-width */
+.hero-grid p{ margin:0; color:var(--muted); max-width:none; }
 
-  .card{
-    background:var(--panel); border:1px solid var(--grid); border-radius:var(--radius); padding:var(--gap-3);
-  }
-  .card h2{ margin:0 0 var(--gap-2); font:600 20px/1.25 Oxanium, sans-serif }
+/* KPI column fills its grid track, so its left/right edges align with the cards below */
+.kpis{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 0;
+  width: 100%;
+}
 
-  .viz{ min-height:340px }
-  .caption{ margin:.5rem 0 0; color:var(--muted) }
+.kpi{
+  background:var(--panel); border:1px solid var(--grid); border-radius:14px;
+  padding:14px 16px; display:flex; flex-direction:column; gap:4px; width:100%;
+}
+.kpi-number{ font-size:28px; line-height:1; font-weight:800; letter-spacing:.3px }
+.kpi-label{ font-size:12px; opacity:.85 }
 
-  footer.meta{
-    margin:var(--gap-5) 0 0; color:var(--muted);
-    border-top:1px solid var(--grid); padding-top:var(--gap-3); font-size:13px;
-  }
-
-  /* Vega-Lite on dark background */
-  .vega-embed .vega-legend text,
-  .vega-embed .leg-title { fill:var(--ink) !important }
-  .vega-embed .role-axis-label, .vega-embed .role-axis-title { fill:var(--ink) !important }
-  .vega-embed .role-axis-grid, .vega-embed .mark-rule { stroke:var(--grid) !important }
-
-  @media (max-width: 1040px){
-    .grid{ grid-template-columns:1fr }
-    .hero-grid{ grid-template-columns: 1fr; }
-    /* KPIs drop under the paragraph in 3 tiles on smaller screens */
-    .kpis{ grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
-  }
+/* Stack on narrow screens, keep sight-lines */
+@media (max-width: 1040px){
+  .hero-grid{ grid-template-columns: 1fr; }
+  .kpis{ grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+}
 </style>
 </head>
 
 <body>
 <div class="container">
-  <header class="hero">
-    <h1>UFO Sightings in America — Where, When, and What We See</h1>
+ <header class="hero">
+  <h1>UFO Sightings in America — Where, When, and What We See</h1>
 
-    <div class="hero-grid">
-      <!-- Left: Intro paragraph -->
-      <p id="intro" class="lede">
-        Step into a visual journey through America’s UFO obsession. Using thousands of real reports from the National UFO
-        Reporting Center, this data story maps where and when sightings happened, what shapes people claimed to see, and
-        the hours they looked to the skies. From glowing lights over cities to mysterious waves of sightings across
-        decades, this visualisation uncovers how curiosity, culture, and imagination have shaped the nation’s view of the
-        unknown.
-      </p>
+  <div class="hero-grid">
+    <!-- Left: Intro paragraph -->
+    <p id="intro">
+      Step into a visual journey through America’s UFO obsession. Using thousands of real reports from the National UFO
+      Reporting Center, this data story maps where and when sightings happened, what shapes people claimed to see, and
+      the hours they looked to the skies. From glowing lights over cities to mysterious waves of sightings across
+      decades, this visualisation uncovers how curiosity, culture, and imagination have shaped the nation’s view of the
+      unknown.
+    </p>
 
-      <!-- Right: KPIs -->
-      <div class="kpis">
-        <div class="kpi"><div class="kpi-number" id="kpi-total">—</div><div class="kpi-label">Total U.S. reports</div></div>
-        <div class="kpi"><div class="kpi-number" id="kpi-peak">—</div><div class="kpi-label">Peak year (reports)</div></div>
-        <div class="kpi"><div class="kpi-number" id="kpi-topcity">—</div><div class="kpi-label">Top city (reports)</div></div>
-      </div>
+    <!-- Right: KPIs -->
+    <div class="kpis">
+      <div class="kpi"><div class="kpi-number" id="kpi-total">—</div><div class="kpi-label">Total U.S. reports</div></div>
+      <div class="kpi"><div class="kpi-number" id="kpi-peak">—</div><div class="kpi-label">Peak year (reports)</div></div>
+      <div class="kpi"><div class="kpi-number" id="kpi-topcity">—</div><div class="kpi-label">Top city (reports)</div></div>
     </div>
-  </header>
+  </div>
+</header>
 
   <section class="grid">
 
@@ -140,7 +122,7 @@
     <article class="card">
       <h2>What time do the UFO visit Earth?</h2>
       <div id="hourly" class="viz" aria-label="Radial bar chart of reports by hour"></div>
-      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn.</p>
+      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn. This pattern makes sense, people are more likely to be outside or looking up during the early evening hours, and the dark sky makes unusual lights easier to spot. It’s a reminder that sometimes, when the world slows down and the stars come out, our imaginations start to roam a little further too.</p>
     </article>
 
     <!-- WHAT: Top 10 cities (ranking) -->
@@ -154,7 +136,7 @@
     <article class="card">
       <h2>What do people report?</h2>
       <div id="shapes" class="viz" aria-label="Stacked 100% bar for all reported shapes"></div>
-      <p id="shapes-desc" class="caption">All reported shapes shown as a single stacked bar (100% scale). Hover to see counts and share.</p>
+      <p id="shapes-desc" class="caption">This chart compresses all UFO shape reports into a single 100% stacked bar, giving a clear view of the overall mix at a glance. Larger segments represent the most commonly reported shapes like lights, triangles, circles, and fireballs, while smaller slivers show the rarer, more unusual forms such as cigars, chevrons, and disks. Hover over each segment to see its exact count and share of the 60,429 shape-labelled reports. Categories like “unknown/other” collect ambiguous descriptions, so they’re best seen as a catch-all rather than a specific shape. The pattern is clear: most sightings cluster around a few familiar shapes, with many unique forms making up only a small fraction of the total.</p>
     </article>
 
     <!-- WHEN: Yearly focus + context (interactive) -->
@@ -324,7 +306,7 @@ async function renderStateChoropleth(){
     const total = counts.reduce((s,d)=>s+d.count,0);
     const descEl = document.getElementById('chor-desc');
     if (descEl){
-      descEl.textContent = `Each state is shaded based on the total number of UFO sightings reported across the U.S., a staggering ${fmt(total)} in total. Highest: ${top}. Lowest: ${bottom}.`;
+      descEl.textContent = `Each state is shaded based on the total number of UFO sightings reported across the U.S., a staggering 61,452 in total. Unsurprisingly, California leads the nation with 8,369 reports, followed by Washington (3,651) and Florida (3,644), all known for their clear skies and busy skies alike. On the other end of the spectrum, Delaware (153), North Dakota (120), and Washington D.C. (6) have seen far fewer mysterious lights. The map paints a fascinating picture of how geography, population, and perhaps a little imagination influence where people are most likely to spot something “unidentified” in the night sky.`;
     }
 
     const spec = {
@@ -394,7 +376,7 @@ async function renderMapFromCities(){
     const desc = document.getElementById('citiesmap-desc');
     if (desc){
       desc.textContent =
-        `Each bubble marks a city; bubble size encodes total reports. White basemap improves contrast. Top 300 cities total ${fmt(totalTop)} reports. Leaders include: ${top5}.`;
+        `Each bubble on the map represents a city, with its size showing how many UFO sightings were reported there. To make the data pop against a dark background, the map uses a clean white basemap for contrast. The visual highlights the top 300 cities, which together account for 18,997 reports, nearly a third of all U.S. sightings. Leading the list are Seattle, WA (472), Phoenix, AZ (439), Las Vegas, NV (335), Los Angeles, CA (333), and San Diego, CA (319), all places known for wide-open skies and vibrant nightlife, where strange lights and unexplained glows might just catch your eye. The result is a snapshot of where curiosity and maybe a bit of cosmic wonder shines brightest. `;
     }
 
     const spec = {
@@ -484,7 +466,7 @@ async function renderCities(){
     const desc = document.getElementById('cities-desc');
     if (desc){
       const list = values.slice(0,5).map(d=>`${titleCase(d.city)} (${fmt(d.count)})`).join(', ');
-      desc.textContent = `Top cities by reports. Leader: ${titleCase(top.city)} with ${fmt(top.count)}. Top ten total: ${fmt(totalTop10)}. Notable: ${list}.`;
+      desc.textContent = `The map highlights the cities that have reported the most UFO sightings across the U.S., with Seattle taking the top spot at 472 sightings. In total, the top ten cities contribute an impressive 3,206 reports, showing just how concentrated some of these “hotspots” are. Other standout locations include Phoenix (423), Portland (342), Las Vegas (339), and Los Angeles (333), all cities where bright skies, bustling nightlife, and open horizons might make mysterious lights hard to ignore. These clusters suggest that UFO fascination thrives not just in remote areas, but also in the heart of America’s most active urban centers.`;
     }
 
     const spec = {
@@ -628,7 +610,7 @@ async function renderYearly(){
 
   const p = document.getElementById('yearly-desc');
   if (p){
-    p.textContent = `Each point marks the total reports for that year. The series stays low through much of the mid-20th century, rises sharply from the late 1990s into the 2000s, then eases off. The dashed line is a 5-year moving average. Use the brush below to zoom a period; hover to see exact counts. Span: ${span}; total ${fmt(total)}. Peak year: ${peak.year} (${fmt(peak.count)}).`;
+    p.textContent = `Each point on the chart shows the total number of UFO reports for a given year. The trend stays relatively flat through much of the mid-20th century, then rises sharply from the late 1990s into the 2000s before gradually easing off. The dashed line represents a five-year moving average, which smooths out short-term fluctuations to make the long-term pattern easier to see. You can use the brush in the lower panel to zoom into any period, which filters the main chart to that span, and hovering over the line shows the exact year and report count. This chart reveals more than just sightings; it reflects social and technological factors such as media coverage, reporting channels, and the spread of the internet that have shaped how and when people report UFOs over time.`;
   }
 
   // Focus+context spec
