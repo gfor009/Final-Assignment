@@ -67,11 +67,10 @@
 </div>
 
 
-    <div class="card">
-      <h2>Yearly trend <span id="b-year" class="badge">checking…</span></h2>
-      <div id="yearly" class="viz"></div>
-    </div>
-  </div>
+    <div class="card wide">
+  <h2>UFO reports by year (interactive focus + context)</h2>
+  <div id="yearly" class="viz"></div>
+  <p id="yearly-desc" style="opacity:.9;margin:.5rem 0 0"></p>
 </div>
 
 <script>
@@ -686,18 +685,124 @@ async function renderShapes(){
 async function renderYearly(){
   try{
     const {url,text} = await fetchFirst(PATHS.yearly);
-    const delim = (text.split(/\r?\n/)[0]||'').includes(';') ? ';' : ',';
+    const first = (text.split(/\r?\n/)[0]||'');
+    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-    const head = rows.shift().map(h=>h.trim().toLowerCase());
-    const iY=head.indexOf("year"), iC=Math.max(head.indexOf("count"), head.indexOf("total"));
-    const values = rows.map(c=>({year:+c[iY], count:smartInt(c[iC])})).filter(d=>Number.isFinite(d.year)&&Number.isFinite(d.count));
-    setBadge("b-year", `loaded ${values.length} rows from ${url}`);
-    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
-      mark:{type:'line', point:true, color:BLUE},
-      encoding:{ x:{field:'year',type:'quantitative',title:'Year'}, y:{field:'count',type:'quantitative',title:'Sightings'} },
-      config:{background:null}};
+    const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
+    const iY = head.indexOf("year");
+    const iC = Math.max(head.indexOf("count"), head.indexOf("total"), head.indexOf("value"), head.indexOf("sightings"));
+
+    let values = rows.map(c=>({year:+c[iY], count:smartInt(c[iC])}))
+                     .filter(d=>Number.isFinite(d.year)&&Number.isFinite(d.count))
+                     .sort((a,b)=>a.year-b.year);
+
+    // stats for description + 5-year moving average
+    const fmt = new Intl.NumberFormat('en-US').format;
+    const span = values.length ? `${values[0].year}–${values[values.length-1].year}` : '';
+    const total = values.reduce((s,d)=>s+d.count,0);
+    const peak = values.reduce((a,b)=> b.count>a.count?b:a, values[0]||{year:'-',count:0});
+    const ma5 = [];
+    let run = 0;
+    for (let i=0;i<values.length;i++){
+      run += values[i].count;
+      if (i>=5) run -= values[i-5].count;
+      ma5.push({year: values[i].year, avg5: (i>=4) ? run/5 : null});
+    }
+
+    // paragraph
+    const p = document.getElementById('yearly-desc');
+    if (p){
+      p.textContent =
+        `Annual reports show a long quiet period through the mid-20th century, then a rapid rise from the late 1990s into the 2000s. ` +
+        `This series spans ${span} with ${fmt(total)} total sightings. Peak year: ${peak.year} (${fmt(peak.count)} reports). ` +
+        `Use the brush below to zoom into any period; the pale line shows the 5-year average.`;
+    }
+
+    // remove old badge if it still exists
+    document.getElementById('b-year')?.remove();
+
+    const BLUE = '#38bdf8';
+
+    // Focus + context (interactive brush) with tooltips & hover highlight
+    const spec = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      vconcat: [
+        {
+          width:1180, height:320,
+          data:{ values },
+          params: [
+            { name: "hover", select: {type:"point", fields:["year"], nearest:true, on:"mouseover", clear:"mouseout"} },
+            { name: "brush", select: {type:"interval", encodings:["x"]} }
+          ],
+          layer: [
+            // area for subtle figure-ground
+            { mark:{type:'area', opacity:0.10, color:BLUE},
+              encoding:{
+                x:{field:'year', type:'quantitative', title:'Year',
+                   axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}, scale:{domain:{param:"brush"}}},
+                y:{field:'count', type:'quantitative', title:'Sightings',
+                   axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}}
+              }
+            },
+            // line
+            { mark:{type:'line', color:BLUE, strokeWidth:1.5},
+              encoding:{
+                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                y:{field:'count', type:'quantitative'}
+              }
+            },
+            // moving average
+            { data:{values: ma5.filter(d=>d.avg5!=null)},
+              mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
+              encoding:{
+                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                y:{field:'avg5', type:'quantitative', title:'5-yr average'}
+              }
+            },
+            // points on hover
+            { mark:{type:'point', filled:true, size:40, color:BLUE},
+              encoding:{
+                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                y:{field:'count', type:'quantitative'},
+                opacity:{ condition:{param:'hover', empty:false, value:1}, value:0 }
+              }
+            },
+            // tooltips
+            { mark:{type:'point', opacity:0},
+              encoding:{
+                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                y:{field:'count', type:'quantitative'},
+                tooltip:[
+                  {field:'year', title:'Year'},
+                  {field:'count', type:'quantitative', title:'Reports', format:',d'}
+                ]
+              }
+            }
+          ],
+          config:{ background:null, axis:{gridColor:'#1f2937'} }
+        },
+        // context brush below
+        {
+          width:1180, height:90,
+          data:{ values },
+          mark:{ type:'area', opacity:0.15, color:BLUE },
+          params:[ { name:"brush", select:{type:"interval", encodings:["x"]} } ],
+          encoding:{
+            x:{ field:'year', type:'quantitative', title:null,
+                axis:{labels:false,ticks:false,domain:false} },
+            y:{ field:'count', type:'quantitative', title:null,
+                axis:{labels:false,ticks:false,domain:false} }
+          },
+          config:{ background:null, view:{stroke:null} }
+        }
+      ],
+      config:{ background:null }
+    };
+
     await vegaEmbed('#yearly', spec, {actions:false});
-  }catch(e){ console.error('Yearly error:', e); setBadge('b-year','failed to load', false); }
+  }catch(e){
+    console.error('Yearly error:', e);
+  }
 }
 
 /* ---------- RUN ALL ---------- */
