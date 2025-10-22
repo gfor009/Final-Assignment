@@ -687,54 +687,67 @@ async function renderShapes(){
     const iS = head.indexOf("shape");
     const iC = Math.max(head.indexOf("count"), head.indexOf("total"), head.indexOf("value"));
 
-    let values = rows
+    // Parse + rank
+    let all = rows
       .map(c=>({ shape:(c[iS]||'').toString().trim().toLowerCase(), count:smartInt(c[iC]) }))
       .filter(r=>r.shape && Number.isFinite(r.count))
       .sort((a,b)=>b.count-a.count);
 
     const titleCase = s => s.replace(/\b\w/g, m=>m.toUpperCase());
-    values = values.map(d=>({ ...d, label: titleCase(d.shape) }));
+    const values = all.slice(0,5).map(d => ({ label:titleCase(d.shape), count:d.count })); // Top 5 only
 
-    const setTop = new Set(values.slice(0,5).map(d=>d.shape));
-    values = values.map(d => ({...d, isTop: setTop.has(d.shape)}));
-
+    // Paragraph
     const fmt = new Intl.NumberFormat('en-US').format;
-    const top5Text = values.slice(0,5).map(d => `${d.label} (${fmt(d.count)})`).join(', ');
-    const total = values.reduce((s,d)=>s+d.count,0);
-    const top5Total = values.slice(0,5).reduce((s,d)=>s+d.count,0);
+    const total = all.reduce((s,d)=>s+d.count,0);
+    const top5Total = values.reduce((s,d)=>s+d.count,0);
+    const topList = values.map(d=>`${d.label} (${fmt(d.count)})`).join(', ');
     const desc = document.getElementById('shapes-desc');
     if (desc){
-      desc.textContent = `Shapes are ranked by reports. Top five: ${top5Text}. `
-        + `Together they account for ${fmt(top5Total)} of ${fmt(total)} shape-labelled reports.`;
+      desc.textContent = `Top five reported shapes: ${topList}. Together they account for ${fmt(top5Total)} of `
+        + `${fmt(total)} shape-labelled reports (${Math.round(100*top5Total/Math.max(1,total))}%).`;
     }
 
-    const GREY = '#64748b';
+    // Full-width horizontal bars (fills the space rather than lollipops)
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width: 620, height: { step: 22 },
-      padding: { left: 120, right: 20, top: 10, bottom: 30 },
+      width: 1180,
+      height: { step: 44 },                    // roomy bars
+      padding: { left: 140, right: 24, top: 8, bottom: 28 },
       data:{ values },
-      layer:[
-        { mark:{ type:'rule', stroke:'#94a3b8', strokeWidth:2 },
-          encoding:{ y:{ field:'label', type:'nominal', sort:'-x', title:null, axis:{ labelColor:'#e5e7eb' } },
-                     x:{ field:'count', type:'quantitative', title:'Reports',
-                         axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb', gridColor:'#1f2937' } },
-                     x2:{ value:0 } } },
-        { mark:{ type:'point', filled:true, size:80 },
-          encoding:{ y:{ field:'label', type:'nominal', sort:'-x' },
-                     x:{ field:'count', type:'quantitative' },
-                     color:{ condition:{ test:'datum.isTop', value: BLUE }, value: GREY },
-                     tooltip:[ { field:'label', title:'Shape' },
-                               { field:'count', type:'quantitative', title:'Reports', format:',d' } ] } },
-        { mark:{ type:'text', align:'left', dx:6, fontSize:11, fill:'#e5e7eb' },
-          encoding:{ y:{ field:'label', type:'nominal', sort:'-x' },
-                     x:{ field:'count', type:'quantitative' },
-                     text:{ field:'count', type:'quantitative', format:',d' } } }
+      layer: [
+        {
+          mark:{ type:'bar', cornerRadiusEnd:6 },
+          encoding:{
+            y:{ field:'label', type:'nominal', sort:'-x', title:null,
+                axis:{ labelColor:'#e5e7eb' } },
+            x:{ field:'count', type:'quantitative', title:'Reports',
+                axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb', gridColor:'#1f2937' } },
+            color:{ value:'#38bdf8' },
+            tooltip:[
+              { field:'label', title:'Shape' },
+              { field:'count', type:'quantitative', title:'Reports', format:',d' }
+            ]
+          }
+        },
+        {
+          // value labels at end of bars
+          mark:{ type:'text', align:'left', dx:6, fontSize:12, fill:'#e5e7eb' },
+          encoding:{
+            y:{ field:'label', type:'nominal', sort:'-x' },
+            x:{ field:'count', type:'quantitative' },
+            text:{ field:'count', type:'quantitative', format:',d' }
+          }
+        }
       ],
       config:{ background:null, view:{ stroke:null } }
     };
+
     await vegaEmbed('#shapes', spec, { actions:false });
-  }catch(e){ console.error('Shapes error:', e); }
+  }catch(e){
+    console.error('Shapes error:', e);
+    const desc = document.getElementById('shapes-desc');
+    if (desc) desc.textContent = 'Could not load shape data.';
+  }
 }
 
 /* ---------- G) YEARLY ---------- */
