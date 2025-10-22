@@ -141,7 +141,7 @@
 
     <!-- WHAT: Shapes — donut (Top 5 only, not a bar) -->
     <article class="card">
-      <h2>What shapes do people report? (Top 5, donut)</h2>
+      <h2>What do people report?</h2>
       <div id="shapes" class="viz" aria-label="Donut of top 5 reported shapes"></div>
       <p id="shapes-desc" class="caption"></p>
     </article>
@@ -790,6 +790,7 @@ async function renderCities(){
 /* ---------- G) SHAPES (Top 5, DONUT) ---------- */
 async function renderShapes(){
   try{
+    // load
     const {text} = await fetchFirst(PATHS.shapes);
     const first = (text.split(/\r?\n/)[0]||'');
     const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
@@ -798,66 +799,55 @@ async function renderShapes(){
     const iS = head.indexOf("shape");
     const iC = Math.max(head.indexOf("count"), head.indexOf("total"), head.indexOf("value"));
 
-    let values = rows
-      .map(c=>({ shape:(c[iS]||'').toString().trim().toLowerCase(), count:smartInt(c[iC]) }))
-      .filter(r=>r.shape && Number.isFinite(r.count))
+    // tidy + aggregate (all shapes)
+    const titleCase = s => s.replace(/\b\w/g, m=>m.toUpperCase());
+    const byShape = new Map();
+    for (const r of rows){
+      const shape = (r[iS]||'').toString().trim().toLowerCase();
+      const count = smartInt(r[iC]);
+      if(!shape || !Number.isFinite(count)) continue;
+      byShape.set(shape, (byShape.get(shape)||0) + count);
+    }
+    const values = [...byShape.entries()]
+      .map(([shape,count]) => ({ label: titleCase(shape), count }))
       .sort((a,b)=>b.count-a.count);
 
-    // top 5 only
-    values = values.slice(0,5);
-    const totalTop5 = values.reduce((s,d)=>s+d.count,0);
-
-    // title-case labels + percentage
-    const titleCase = s => s.replace(/\b\w/g, m=>m.toUpperCase());
-    values = values.map(d => ({ label:titleCase(d.shape), count:d.count, pct:d.count/totalTop5 }));
-
-    const fmt = new Intl.NumberFormat('en-US').format;
-    const p = document.getElementById('shapes-desc');
-    if (p){
-      const list = values.map(d=>`${d.label} (${fmt(d.count)})`).join(', ');
-      p.textContent = `Top 5 reported shapes (by count): ${list}. Together they account for ${fmt(totalTop5)} reports among shape-labelled cases. The donut shows share within the top five.`;
+    const total = values.reduce((s,d)=>s+d.count,0);
+    const desc = document.getElementById('shapes-desc');
+    if (desc){
+      desc.textContent = `All reported shapes shown as a single stacked bar (100% scale). Hover to see counts and share. Total shape-labelled reports: ${new Intl.NumberFormat('en-US').format(total)}.`;
     }
 
-    // Donut chart
+    // Vega-Lite: single 100% stacked bar across X (proportions), colored by shape
     const spec = {
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: 580, height: 360,
+      width: "container",
+      height: 120,
+      autosize: { type: "fit", contains: "padding" },
       data: { values },
-      layer: [
-        {
-          mark: { type: "arc", innerRadius: 80, outerRadius: 140, cornerRadius: 4 },
-          encoding: {
-            theta: { field: "count", type: "quantitative", title: "Reports" },
-            color: {
-              field: "label", type: "nominal", title: null,
-              scale: { scheme: "tableau10" },
-              legend: { orient: "right", labelColor:"#e5e7eb" }
-            },
-            tooltip: [
-              { field: "label", title: "Shape" },
-              { field: "count", type: "quantitative", title: "Reports", format: ",d" },
-              { field: "pct", type: "quantitative", title: "Share (top 5)", format: ".0%" }
-            ]
-          }
-        },
-        {
-          // center label (total top5)
-          mark: { type: "text", fontSize: 16, fontWeight: 700, dy: -4, fill: "#e5e7eb" },
-          encoding: { text: { value: "Top 5 total" } }
-        },
-        {
-          mark: { type: "text", fontSize: 18, dy: 16, fill: "#e5e7eb" },
-          encoding: { text: { value: new Intl.NumberFormat('en-US').format(totalTop5) } }
-        }
+      transform: [
+        { calculate: '"All shapes"', as: "group" },
+        { joinaggregate: [{ op: "sum", field: "count", as: "total" }] },
+        { calculate: "datum.count / datum.total", as: "pct" }
       ],
+      mark: { type: "bar", cornerRadiusEnd: 2 },
+      encoding: {
+        y: { field: "group", type: "nominal", title: null, axis: { labels: false, ticks: false } },
+        x: { field: "count", type: "quantitative", stack: "normalize", axis: { format: "%" }, title: "Share of shape reports" },
+        color: { field: "label", type: "nominal", title: "Shape", legend: { labelColor: "#e5e7eb" }, scale: { scheme: "tableau10" } },
+        tooltip: [
+          { field: "label", title: "Shape" },
+          { field: "count", type: "quantitative", title: "Reports", format: ",d" },
+          { field: "pct", type: "quantitative", title: "Share", format: ".1%" }
+        ]
+      },
       view: { stroke: null },
-      config: { background: null }
+      config: { background: null, axis: { labelColor: "#e5e7eb", titleColor: "#e5e7eb" } }
     };
 
-    await vegaEmbed('#shapes', spec, {actions:false});
-  }catch(e){ console.error('Shapes error:', e); }
+    await vegaEmbed('#shapes', spec, { actions:false });
+  }catch(e){ console.error('Shapes (stacked) error:', e); }
 }
-
 /* ---------- RUN ALL ---------- */
 Promise.all([
   renderKPIs(),
