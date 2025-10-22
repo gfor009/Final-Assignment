@@ -31,7 +31,7 @@
   <div class="grid">
     <!-- A) STATE CHOROPLETH -->
     <div class="card wide">
-      <h2>State totals (choropleth) <span id="b-chor" class="badge">checking…</span></h2>
+      <h2>UFO sightings by U.S. state<span id="b-chor" class="badge">checking…</span></h2>
       <div id="chor" class="viz" style="min-height:420px"></div>
     </div>
 
@@ -143,7 +143,8 @@ async function renderStateChoropleth(){
     const fipsMap = new Map(FIPS);
 
     const {url, text} = await fetchFirst(PATHS.raw);
-    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';')?';':',';
+    const first = (text.split(/\r?\n/)[0]||'');
+    const delim = first.includes(';')?';':',';
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const idx = n => head.indexOf(n);
@@ -158,23 +159,49 @@ async function renderStateChoropleth(){
       if (!fipsMap.has(abbr)) continue;
       byState.set(abbr, (byState.get(abbr)||0) + 1);
     }
-    const counts = []; for (const [abbr,n] of byState) counts.push({id:fipsMap.get(abbr), abbr, count:n});
-    setBadge('b-chor', `aggregated ${counts.length} states from ${url}`);
+    const counts = [];
+    for (const [abbr,n] of byState) counts.push({id:fipsMap.get(abbr), abbr, count:n});
+
+    // If you left the badge span in the HTML, hide it:
+    document.getElementById('b-chor')?.remove();
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:1180, height:420, data: topo,
-      transform:[{lookup:'id', from:{data:{values:counts}, key:'id', fields:['count','abbr']}}],
-      mark:{type:'geoshape', stroke:'#98a0ab', strokeWidth:0.7},
+      width:1180, height:420,
+      data: topo,
+      transform:[{
+        lookup:'id',
+        from:{ data:{ values:counts }, key:'id', fields:['count','abbr'] }
+      }],
+      mark:{ type:'geoshape', stroke:'#98a0ab', strokeWidth:0.7 },
       encoding:{
-        color:{field:'count', type:'quantitative', title:'Sightings', scale:{scheme:'blues'}},
-        tooltip:[{field:'abbr', title:'State'}, {field:'count', type:'quantitative', title:'Sightings'}]
+        color:{
+          field:'count', type:'quantitative',
+          title:'Total sightings',
+          scale:{ scheme:'blues' },
+          legend:{
+            orient:'right',
+            gradientLength:240,
+            tickCount:6,
+            format:',d',
+            titleFontSize:12,
+            labelFontSize:11
+          }
+        },
+        tooltip:[
+          { field:'abbr', title:'State' },
+          { field:'count', type:'quantitative', title:'Sightings', format:',d' }
+        ]
       },
-      projection:{type:'albersUsa'},
-      config:{background:null}
+      projection:{ type:'albersUsa' },
+      config:{ background:null }
     };
+
     await vegaEmbed('#chor', spec, {actions:false});
-  }catch(e){ console.error('Choropleth error:', e); setBadge('b-chor','failed to load', false); }
+  }catch(e){
+    console.error('Choropleth error:', e);
+    // If you also removed the badge span, no need to set error text.
+  }
 }
 
 /* ---------- B) CITY BUBBLE MAP (from ufo_cities_latlon.csv) ---------- */
