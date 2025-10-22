@@ -38,23 +38,36 @@
   .container{ max-width:var(--container); margin:auto; padding:var(--gap-4) var(--gap-3) }
 
   header.hero{ margin:0 0 var(--gap-4) }
-  header.hero h1{ margin:0 0 6px; font:700 28px/1.15 Oxanium, sans-serif; letter-spacing:.2px; }
-  header.hero p{ margin:0; color:var(--muted); max-width:78ch }
+  header.hero h1{ margin:0 0 10px; font:700 28px/1.15 Oxanium, sans-serif; letter-spacing:.2px; }
+  header.hero p{ margin:0; color:var(--muted) }
 
-  /* KPI strip – 3 items (Total, Peak year, Top city) */
-  .kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:18px 0 8px }
+  /* ===== Header layout: paragraph + KPIs side-by-side ===== */
+  .hero-grid{
+    display:grid;
+    grid-template-columns: minmax(0, 1fr) 380px; /* left: fluid paragraph, right: fixed KPI column */
+    gap: 16px;
+    align-items: start;
+  }
+  /* KPIs shown as a vertical stack in the right column */
+  .kpis{
+    display:grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin: 0;               /* no extra margins so it aligns with the paragraph */
+  }
   .kpi{
     background:var(--panel); border:1px solid var(--grid); border-radius:14px;
-    padding:14px 16px; display:flex; flex-direction:column; gap:4px;
+    padding:14px 16px; display:flex; flex-direction:column; gap:4px; width:100%;
   }
   .kpi-number{ font-size:28px; line-height:1; font-weight:800; letter-spacing:.3px }
   .kpi-label{ font-size:12px; opacity:.85 }
+  /* Let the paragraph span the full left column width */
+  header.hero p.lede{ max-width:none; }
 
-  /* Grid */
+  /* Grid for content cards */
   .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:var(--gap-3) }
   .wide{ grid-column:1 / -1 }
 
-  /* Cards */
   .card{
     background:var(--panel); border:1px solid var(--grid); border-radius:var(--radius); padding:var(--gap-3);
   }
@@ -76,40 +89,36 @@
 
   @media (max-width: 1040px){
     .grid{ grid-template-columns:1fr }
+    .hero-grid{ grid-template-columns: 1fr; }
+    /* KPIs drop under the paragraph in 3 tiles on smaller screens */
+    .kpis{ grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
   }
 </style>
 </head>
 
 <body>
 <div class="container">
- <header class="hero">
-  <div class="hero-grid">
+  <header class="hero">
     <h1>UFO Sightings in America — Where, When, and What We See</h1>
 
-    <!-- KPIs now live in the left column of the header -->
-    <div class="kpis kpis-vertical">
-      <div class="kpi">
-        <div class="kpi-number" id="kpi-total">—</div>
-        <div class="kpi-label">Total U.S. reports</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-number" id="kpi-peak">—</div>
-        <div class="kpi-label">Peak year (reports)</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi-number" id="kpi-topcity">—</div>
-        <div class="kpi-label">Top city (reports)</div>
-      </div>
+    <div class="hero-grid">
+      <!-- Left: Intro paragraph -->
+      <p id="intro" class="lede">
+        Step into a visual journey through America’s UFO obsession. Using thousands of real reports from the National UFO
+        Reporting Center, this data story maps where and when sightings happened, what shapes people claimed to see, and
+        the hours they looked to the skies. From glowing lights over cities to mysterious waves of sightings across
+        decades, this visualisation uncovers how curiosity, culture, and imagination have shaped the nation’s view of the
+        unknown.
+      </p>
 
-    <!-- Description sits in the right column -->
-    <p id="intro" class="lede hero-intro">
-      Step into a visual journey through America’s UFO obsession. Using thousands of real reports from
-      the National UFO Reporting Center, this data story maps where and when sightings happened, what
-      shapes people claimed to see, and the hours they looked to the skies. From glowing lights over
-      cities to mysterious waves of sightings across decades, this visualisation uncovers how curiosity,
-      culture, and imagination have shaped the nation’s view of the unknown.
-    </p>
-  </div>
+      <!-- Right: KPIs -->
+      <div class="kpis">
+        <div class="kpi"><div class="kpi-number" id="kpi-total">—</div><div class="kpi-label">Total U.S. reports</div></div>
+        <div class="kpi"><div class="kpi-number" id="kpi-peak">—</div><div class="kpi-label">Peak year (reports)</div></div>
+        <div class="kpi"><div class="kpi-number" id="kpi-topcity">—</div><div class="kpi-label">Top city (reports)</div></div>
+      </div>
+    </div>
+  </header>
 
   <section class="grid">
 
@@ -131,7 +140,7 @@
     <article class="card">
       <h2>What time do the UFO visit Earth?</h2>
       <div id="hourly" class="viz" aria-label="Radial bar chart of reports by hour"></div>
-      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn. This pattern makes sense people are more likely to be outside or looking up during the early evening hours, and the dark sky makes unusual lights easier to spot. It’s a reminder that sometimes, when the world slows down and the stars come out, our imaginations roam a little further too.</p>
+      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn.</p>
     </article>
 
     <!-- WHAT: Top 10 cities (ranking) -->
@@ -315,8 +324,7 @@ async function renderStateChoropleth(){
     const total = counts.reduce((s,d)=>s+d.count,0);
     const descEl = document.getElementById('chor-desc');
     if (descEl){
-      descEl.textContent =
-        `Each state is shaded based on the total number of UFO sightings reported across the U.S. a staggering 61,452 in total. Unsurprisingly, California leads the nation with 8,369 reports, followed by Washington (3,651) and Florida (3,644), all known for their clear skies and busy skies alike. On the other end of the spectrum, Delaware (153), North Dakota (120), and Washington D.C. (6) have seen far fewer mysterious lights. The map paints a fascinating picture of how geography, population, and perhaps a little imagination influence where people are most likely to spot something “unidentified” in the night sky.`;
+      descEl.textContent = `Each state is shaded based on the total number of UFO sightings reported across the U.S., a staggering ${fmt(total)} in total. Highest: ${top}. Lowest: ${bottom}.`;
     }
 
     const spec = {
@@ -386,7 +394,7 @@ async function renderMapFromCities(){
     const desc = document.getElementById('citiesmap-desc');
     if (desc){
       desc.textContent =
-        `Each bubble on the map represents a city, with its size showing how many UFO sightings were reported there. To make the data pop against a dark background, the map uses a clean white basemap for contrast. The visual highlights the top 300 cities, which together account for 18,997 reports nearly a third of all U.S. sightings. Leading the list are Seattle, WA (472), Phoenix, AZ (439), Las Vegas, NV (335), Los Angeles, CA (333), and San Diego, CA (319) all places known for wide-open skies and vibrant nightlife, where strange lights and unexplained glows might just catch your eye. The result is a snapshot of where curiosity and maybe a bit of cosmic wonder—shines brightest.`;
+        `Each bubble marks a city; bubble size encodes total reports. White basemap improves contrast. Top 300 cities total ${fmt(totalTop)} reports. Leaders include: ${top5}.`;
     }
 
     const spec = {
@@ -476,8 +484,7 @@ async function renderCities(){
     const desc = document.getElementById('cities-desc');
     if (desc){
       const list = values.slice(0,5).map(d=>`${titleCase(d.city)} (${fmt(d.count)})`).join(', ');
-      desc.textContent =
-        `Top cities by total reports. Leader: ${titleCase(top.city)} with ${fmt(top.count)} sightings. The top ten account for ${fmt(totalTop10)} reports. Notable hotspots include ${list}.`;
+      desc.textContent = `Top cities by reports. Leader: ${titleCase(top.city)} with ${fmt(top.count)}. Top ten total: ${fmt(totalTop10)}. Notable: ${list}.`;
     }
 
     const spec = {
@@ -518,7 +525,7 @@ async function renderShapes(){
                      .filter(d=>d.shape && Number.isFinite(d.count));
     const total = values.reduce((s,d)=>s+d.count,0);
     values = values.map(d=>({ ...d, pct: total ? d.count/total : 0 }));
-    values.sort((a,b)=>b.count-a.count); // largest left-to-right
+    values.sort((a,b)=>b.count-a.count);
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
@@ -544,8 +551,7 @@ async function renderShapes(){
 
     const fmt = new Intl.NumberFormat('en-US').format;
     const p = document.getElementById('shapes-desc');
-    if (p) p.textContent =
-      `This chart compresses all UFO shape reports into a single 100% stacked bar. Larger segments represent common shapes (lights, triangles, circles, fireballs), while thinner slivers are rarer forms. Hover to see exact counts and shares out of ${fmt(total)} shape-labelled reports. “Unknown/Other” groups ambiguous descriptions.`;
+    if (p) p.textContent = `This chart compresses all shape reports into a single 100% stacked bar. Larger segments represent common shapes (e.g., lights, triangles, circles), while smaller slivers capture rarer forms. Hover to see exact counts and share of the ${fmt(total)} shape-labelled reports.`;
   }catch(e){ console.error('Shapes error:', e); }
 }
 
@@ -622,7 +628,7 @@ async function renderYearly(){
 
   const p = document.getElementById('yearly-desc');
   if (p){
-    p.textContent = "Each point represents the total number of UFO reports for a year. The trend is flat through much of the mid-20th century, then climbs sharply from the late 1990s into the 2000s before easing. The dashed line shows a five-year moving average to smooth short-term noise. Use the brush in the lower panel to zoom any span; hover to see exact counts. Beyond sightings, the curve reflects social and technological factors—media cycles, reporting channels, and the rise of the internet—that shaped how people reported UFOs over time.";
+    p.textContent = `Each point marks the total reports for that year. The series stays low through much of the mid-20th century, rises sharply from the late 1990s into the 2000s, then eases off. The dashed line is a 5-year moving average. Use the brush below to zoom a period; hover to see exact counts. Span: ${span}; total ${fmt(total)}. Peak year: ${peak.year} (${fmt(peak.count)}).`;
   }
 
   // Focus+context spec
