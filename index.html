@@ -82,18 +82,33 @@
 
 <body>
 <div class="container">
-  <header class="hero">
+ <header class="hero">
+  <div class="hero-grid">
     <h1>UFO Sightings in America — Where, When, and What We See</h1>
-    <p id="intro">
-      Step into a visual journey through America’s UFO obsession. Using thousands of real reports from the National UFO Reporting Center, this data story maps where and when sightings happened, what shapes people claimed to see, and the hours they looked to the skies. From glowing lights over cities to mysterious waves of sightings across decades, this visualisation uncovers how curiosity, culture, and imagination have shaped the nation’s view of the unknown.
-    </p>
-  </header>
 
-  <!-- KPI STRIP (3 items) -->
-  <div class="kpis">
-    <div class="kpi"><div class="kpi-number" id="kpi-total">—</div><div class="kpi-label">Total U.S. reports</div></div>
-    <div class="kpi"><div class="kpi-number" id="kpi-peak">—</div><div class="kpi-label">Peak year (reports)</div></div>
-    <div class="kpi"><div class="kpi-number" id="kpi-topcity">—</div><div class="kpi-label">Top city (reports)</div></div>
+    <!-- KPIs now live in the left column of the header -->
+    <div class="kpis kpis-vertical">
+      <div class="kpi">
+        <div class="kpi-number" id="kpi-total">—</div>
+        <div class="kpi-label">Total U.S. reports</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-number" id="kpi-peak">—</div>
+        <div class="kpi-label">Peak year (reports)</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-number" id="kpi-topcity">—</div>
+        <div class="kpi-label">Top city (reports)</div>
+      </div>
+
+    <!-- Description sits in the right column -->
+    <p id="intro" class="lede hero-intro">
+      Step into a visual journey through America’s UFO obsession. Using thousands of real reports from
+      the National UFO Reporting Center, this data story maps where and when sightings happened, what
+      shapes people claimed to see, and the hours they looked to the skies. From glowing lights over
+      cities to mysterious waves of sightings across decades, this visualisation uncovers how curiosity,
+      culture, and imagination have shaped the nation’s view of the unknown.
+    </p>
   </div>
 
   <section class="grid">
@@ -116,7 +131,7 @@
     <article class="card">
       <h2>What time do the UFO visit Earth?</h2>
       <div id="hourly" class="viz" aria-label="Radial bar chart of reports by hour"></div>
-      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn. This pattern makes sense—people are more likely to be outside or looking up during the early evening hours, and the dark sky makes unusual lights easier to spot. It’s a reminder that sometimes, when the world slows down and the stars come out, our imaginations roam a little further too.</p>
+      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn. This pattern makes sense people are more likely to be outside or looking up during the early evening hours, and the dark sky makes unusual lights easier to spot. It’s a reminder that sometimes, when the world slows down and the stars come out, our imaginations roam a little further too.</p>
     </article>
 
     <!-- WHAT: Top 10 cities (ranking) -->
@@ -301,7 +316,7 @@ async function renderStateChoropleth(){
     const descEl = document.getElementById('chor-desc');
     if (descEl){
       descEl.textContent =
-        `Each state is shaded by total UFO sightings, ${fmt(total)} reports in all. Highest: ${top}. Lowest: ${bottom}. Larger, more populous states tend to report more sightings.`;
+        `Each state is shaded based on the total number of UFO sightings reported across the U.S. a staggering 61,452 in total. Unsurprisingly, California leads the nation with 8,369 reports, followed by Washington (3,651) and Florida (3,644), all known for their clear skies and busy skies alike. On the other end of the spectrum, Delaware (153), North Dakota (120), and Washington D.C. (6) have seen far fewer mysterious lights. The map paints a fascinating picture of how geography, population, and perhaps a little imagination influence where people are most likely to spot something “unidentified” in the night sky.`;
     }
 
     const spec = {
@@ -371,7 +386,7 @@ async function renderMapFromCities(){
     const desc = document.getElementById('citiesmap-desc');
     if (desc){
       desc.textContent =
-        `Each bubble marks a city; bubble size encodes total reports. White basemap improves contrast. Top 300 cities shown (${fmt(totalTop)} reports). Leaders include: ${top5}.`;
+        `Each bubble on the map represents a city, with its size showing how many UFO sightings were reported there. To make the data pop against a dark background, the map uses a clean white basemap for contrast. The visual highlights the top 300 cities, which together account for 18,997 reports nearly a third of all U.S. sightings. Leading the list are Seattle, WA (472), Phoenix, AZ (439), Las Vegas, NV (335), Los Angeles, CA (333), and San Diego, CA (319) all places known for wide-open skies and vibrant nightlife, where strange lights and unexplained glows might just catch your eye. The result is a snapshot of where curiosity and maybe a bit of cosmic wonder—shines brightest.`;
     }
 
     const spec = {
