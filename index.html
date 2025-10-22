@@ -45,6 +45,19 @@
   }
   header.hero p{ margin:0; color:var(--muted) }
 
+  .lede{opacity:.9;margin:.25rem 0 1rem;max-width:78ch}
+.kpis{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:18px 0 8px
+}
+.kpi{
+  background:var(--panel);border:1px solid var(--stroke);border-radius:14px;
+  padding:14px 16px;display:flex;flex-direction:column;gap:4px;
+}
+.kpi-number{font-size:28px;line-height:1;font-weight:800;letter-spacing:.3px;color:var(--ink)}
+.kpi-label{font-size:12px;opacity:.8}
+@media (max-width:900px){.kpis{grid-template-columns:1fr 1fr}}
+
+
   /* Balanced 2-column editorial grid */
   .grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--gap-3) }
   .wide{ grid-column:1 / -1 }
@@ -78,10 +91,20 @@
 
 <body>
 <div class="container">
-  <header class="hero">
-    <h1>UFO Sightings Explorer — USA Focus</h1>
-    <p>An annotated tour through where, when, and what people report in U.S. UFO data.</p>
-  </header>
+  <h1>UFO Sightings in America — Where, When, and What We See</h1>
+  <p id="intro" class="lede">
+    An annotated tour of U.S. UFO reports: which states and cities report the most, how sightings
+    rise and fall through time, what shapes people claim to see, and when in the day they look up.
+    The aim is to show patterns you can verify from the data — not to prove or debunk anything —
+    which is exactly why this dataset is fun: it mixes geography, culture, and time in one story.
+  </p>
+   <!-- KPI STRIP -->
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-number" id="kpi-total">—</div><div class="kpi-label">Total U.S. reports</div></div>
+    <div class="kpi"><div class="kpi-number" id="kpi-states">—</div><div class="kpi-label">States covered</div></div>
+    <div class="kpi"><div class="kpi-number" id="kpi-peak">—</div><div class="kpi-label">Peak year (reports)</div></div>
+    <div class="kpi"><div class="kpi-number" id="kpi-topcity">—</div><div class="kpi-label">Top city (reports)</div></div>
+  </div>
 
   <section class="grid">
     <!-- WHERE: State choropleth -->
@@ -193,7 +216,84 @@ function ymKey(s){
   return null;
 }
 const BLUE = '#38bdf8';
+async function renderKPIs(){
+  // helper: parse a CSV text with auto-delimiter
+  const parseCSV = (text) => {
+    const first = (text.split(/\r?\n/)[0]||'');
+    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
+    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
+    const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
+    return {head, rows};
+  };
 
+  // 1) From scrubbed.csv (US only): total, states, yearly peak
+  let totalUS = 0;
+  let peakYear = {year:'—', count:0};
+  const states = new Set();
+
+  try{
+    const {text} = await fetchFirst(PATHS.raw);
+    const {head, rows} = parseCSV(text);
+
+    const iCountry = head.indexOf('country');
+    const iState   = Math.max(head.indexOf('state'), head.indexOf('state/province'));
+    const iDT      = [head.indexOf('datetime'), head.indexOf('date_time'), head.indexOf('date'),
+                      head.indexOf('occurred'), head.indexOf('sighted_at')].find(i=>i>=0);
+
+    const byYear = new Map();
+
+    for (const r of rows){
+      if (iCountry>=0 && (r[iCountry]||'').trim().toLowerCase()!=='us') continue;
+      totalUS++;
+      if (iState>=0) states.add((r[iState]||'').trim().toUpperCase());
+      if (iDT>=0){
+        const m = String(r[iDT]||'').match(/(\d{4})/);
+        if (m){ const y=+m[1]; byYear.set(y, (byYear.get(y)||0)+1); }
+      }
+    }
+
+    if (byYear.size){
+      const arr = [...byYear.entries()].map(([year,count])=>({year,count})).sort((a,b)=>b.count-a.count);
+      peakYear = arr[0];
+    }
+  }catch(e){ console.warn('KPI (raw) failed:', e); }
+
+  // 2) From city CSV: top city
+  let topCity = {label:'—', count:0};
+  try{
+    const {text} = await fetchFirst(PATHS.citiesLatLon);
+    const {head, rows} = parseCSV(text);
+    const iCity = head.indexOf('city');
+    const iState = Math.max(head.indexOf('state'), head.indexOf('region'));
+    const iCountry = head.indexOf('country');
+    const iCnt = Math.max(head.indexOf('count'), head.indexOf('sightings'), head.indexOf('total'), head.indexOf('value'));
+
+    const agg = new Map();
+    for (const r of rows){
+      if (iCountry>=0 && (r[iCountry]||'').trim().toLowerCase()!=='us') continue;
+      const city  = (r[iCity]||'').trim();
+      const state = (r[iState]||'').trim();
+      const cnt   = smartInt(r[iCnt]);
+      if (!city || !Number.isFinite(cnt)) continue;
+      const key = `${city}__${state}`;
+      agg.set(key, (agg.get(key)||0) + cnt);
+    }
+    if (agg.size){
+      const [key,count] = [...agg.entries()].sort((a,b)=>b[1]-a[1])[0];
+      const [c,s] = key.split('__');
+      topCity = {label:`${c}, ${s}`, count};
+    }
+  }catch(e){ console.warn('KPI (cities) failed:', e); }
+
+  // 3) Paint KPIs
+  const fmt = new Intl.NumberFormat('en-US').format;
+  const el = (id, v) => { const n=document.getElementById(id); if(n) n.textContent=v; };
+
+  el('kpi-total',   fmt(totalUS));
+  el('kpi-states',  states.size ? `${states.size}/51` : '—');  // lower-48 + AK, HI, DC
+  el('kpi-peak',    (peakYear.year!=='—') ? `${peakYear.year} (${fmt(peakYear.count)})` : '—');
+  el('kpi-topcity', topCity.count ? `${topCity.label} (${fmt(topCity.count)})` : '—');
+}
 /* ---------- A) STATE CHOROPLETH ---------- */
 async function renderStateChoropleth(){
   try{
@@ -818,6 +918,7 @@ async function renderYearly(){
 }
 /* ---------- RUN ALL ---------- */
 Promise.all([
+  renderKPIs(),              // ← new
   renderStateChoropleth(),
   renderMapFromCities(),
   renderMonthly(),
@@ -826,6 +927,7 @@ Promise.all([
   renderShapes(),
   renderYearly()
 ]);
+
 </script>
 </body>
 </html>
