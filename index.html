@@ -4,74 +4,144 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>UFO Sightings Explorer — USA Focus</title>
+
+<!-- Vega -->
 <script src="https://unpkg.com/vega@5"></script>
 <script src="https://unpkg.com/vega-lite@5"></script>
 <script src="https://unpkg.com/vega-embed@6"></script>
+
+<!-- Typography (sci-fi headline + highly readable body) -->
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
 <style>
-  :root{--bg:#0f172a;--panel:#0b1220;--stroke:#1f2937;--ink:#e5e7eb;--ok:#a3e635;--okbg:#052e16;--okbd:#14532d;--err:#fecaca;--errbg:#3f1d1d;--errbd:#7f1d1d;--blue:#38bdf8}
-  html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .container{max-width:1220px;margin:auto;padding:24px}
-  h1{margin:0 0 8px}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  .card{background:var(--panel);border:1px solid var(--stroke);border-radius:14px;padding:12px}
-  .card h2{margin:0 0 8px;display:flex;align-items:center;gap:8px}
-  .badge{font-size:12px;color:var(--ok);background:var(--okbg);border:1px solid var(--okbd);border-radius:999px;padding:2px 8px}
-  .badge.err{color:var(--err);background:var(--errbg);border-color:var(--errbd)}
-  .viz{min-height:340px}
-  .wide{grid-column:1/-1}
-  @media (max-width: 900px){.grid{grid-template-columns:1fr}}
+  :root{
+    /* Harmonised colour system */
+    --bg:#0b1120;     /* page background */
+    --panel:#0f172a;  /* card background */
+    --grid:#1f2937;   /* grid lines / dividers */
+    --ink:#e5e7eb;    /* primary text */
+    --muted:#94a3b8;  /* secondary text */
+    --accent:#38bdf8; /* highlight / focus */
+    --accent-soft:#9dd6ff;
+
+    /* Rhythm */
+    --gap-1:12px; --gap-2:16px; --gap-3:24px; --gap-4:32px; --gap-5:48px;
+    --radius:16px;
+    --container:1240px;
+  }
+
+  html, body { height: 100% }
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font: 14.5px/1.6 Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+
+  .container{ max-width:var(--container); margin:auto; padding:var(--gap-4) var(--gap-3) }
+
+  header.hero{ margin:0 0 var(--gap-4) }
+  header.hero h1{
+    margin:0 0 6px; font:700 28px/1.15 Oxanium, sans-serif; letter-spacing:.2px;
+  }
+  header.hero p{ margin:0; color:var(--muted) }
+
+  /* Balanced 2-column editorial grid */
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--gap-3) }
+  .wide{ grid-column:1 / -1 }
+
+  /* Cards = consistent figure–ground */
+  .card{
+    background:var(--panel);
+    border:1px solid var(--grid);
+    border-radius:var(--radius);
+    padding:var(--gap-3);
+  }
+  .card h2{ margin:0 0 var(--gap-2); font:600 20px/1.25 Oxanium, sans-serif }
+
+  .viz{ min-height:340px }
+  .caption{ margin:.4rem 0 0; color:var(--muted) }
+
+  footer.meta{
+    margin:var(--gap-5) 0 0; color:var(--muted);
+    border-top:1px solid var(--grid); padding-top:var(--gap-3); font-size:13px;
+  }
+
+  /* Make Vega legends/axes readable on dark background */
+  .vega-embed .vega-legend text,
+  .vega-embed .leg-title { fill:var(--ink) !important }
+  .vega-embed .role-axis-label, .vega-embed .role-axis-title { fill:var(--ink) !important }
+  .vega-embed .role-axis-grid, .vega-embed .mark-rule { stroke:var(--grid) !important }
+
+  @media (max-width: 980px){ .grid{ grid-template-columns:1fr } }
 </style>
 </head>
+
 <body>
 <div class="container">
-  <h1>UFO Sightings Explorer — USA Focus</h1>
-  <p>CSVs can live in <code>/data</code> or the repo root. Badges show what each chart loaded.</p>
+  <header class="hero">
+    <h1>UFO Sightings Explorer — USA Focus</h1>
+    <p>An annotated tour through where, when, and what people report in U.S. UFO data.</p>
+  </header>
 
-  <div class="card wide">
-  <h2>UFO sightings by U.S. state</h2>
-  <div id="chor" class="viz" style="min-height:420px"></div>
-  <p id="chor-desc" style="opacity:.9;margin:.5rem 0 0"></p>
+  <section class="grid">
+    <!-- WHERE: State choropleth -->
+    <article class="card wide">
+      <h2>Where are reports concentrated? (by state)</h2>
+      <div id="chor" class="viz" aria-label="Choropleth of total reports by U.S. state"></div>
+      <p id="chor-desc" class="caption"></p>
+    </article>
+
+    <!-- WHERE (detail): City bubble map -->
+    <article class="card wide">
+      <h2>City hotspots (top 300 bubbles)</h2>
+      <div id="citiesmap" class="viz" aria-label="Bubble map of top-reporting cities"></div>
+      <p id="citiesmap-desc" class="caption"></p>
+    </article>
+
+    <!-- WHEN: Monthly trend -->
+    <article class="card wide">
+      <h2>Monthly UFO reports in the U.S.</h2>
+      <div id="monthly" class="viz" aria-label="Monthly time series with 12-month average"></div>
+      <p id="monthly-desc" class="caption"></p>
+    </article>
+
+    <!-- WHEN: Hour-of-day radial -->
+    <article class="card">
+      <h2>When in the day? (radial)</h2>
+      <div id="hourly" class="viz" aria-label="Radial bar chart of reports by hour"></div>
+      <p class="caption">Evening hours dominate; labels on the rim aid orientation.</p>
+    </article>
+
+    <!-- WHAT: Top 10 cities (ranking) -->
+    <article class="card">
+      <h2>Top 10 cities for UFO reports (No.1 highlighted)</h2>
+      <div id="cities" class="viz" aria-label="Bar ranking of top 10 cities"></div>
+      <p id="cities-desc" class="caption"></p>
+    </article>
+
+    <!-- WHAT: Shapes -->
+    <article class="card">
+      <h2>What do people report? (shapes, ranked)</h2>
+      <div id="shapes" class="viz" aria-label="Lollipop chart of reported shapes"></div>
+      <p id="shapes-desc" class="caption"></p>
+    </article>
+
+    <!-- WHEN: Yearly focus + context -->
+    <article class="card wide">
+      <h2>UFO reports by year (interactive focus + context)</h2>
+      <div id="yearly" class="viz" aria-label="Yearly series with 5-year average and brush"></div>
+      <p id="yearly-desc" class="caption"></p>
+    </article>
+  </section>
+
+  <footer class="meta">
+    <strong>Data:</strong> NUFORC “scrubbed.csv” + derived aggregates. <strong>Scope:</strong> U.S. only.  
+    <strong>Author:</strong> Your Name • <strong>Date:</strong> <span id="today"></span> •
+    <strong>Tools:</strong> Vega-Lite 5, GitHub Pages.  
+    <strong>Notes:</strong> Outliers capped where noted; coordinates cleaned; legends/axes harmonised for consistent figure–ground.
+  </footer>
 </div>
-
-    <!-- B) CITY BUBBLE MAP (from ufo_cities_latlon.csv) -->
-    <div class="card wide">
-  <h2>UFO sightings by city (top 300 hotspots)</h2>
-  <div id="citiesmap" class="viz" style="min-height:420px"></div>
-  <p id="citiesmap-desc" style="opacity:.9;margin:.5rem 0 0"></p>
-</div>
-
-    <!-- Other charts -->
-    <div class="card wide">
-  <h2>Monthly UFO reports in the U.S.</h2>
-  <div id="monthly" class="viz"></div>
-  <p id="monthly-desc" style="opacity:.9;margin:.5rem 0 0"></p>
-</div>
-
-    <div class="card">
-  <h2>UFO reports by hour (radial)</h2>
-  <div id="hourly" class="viz"></div>
-</div>
-
-    <div class="card">
-  <h2>Top 10 cities for UFO reports</h2>
-  <div id="cities" class="viz"></div>
-  <p id="cities-desc" style="opacity:.9;margin:.5rem 0 0"></p>
-</div>
-
-
-    <div class="card">
-  <h2>UFO report shapes (ranked lollipop)</h2>
-  <div id="shapes" class="viz"></div>
-  <p id="shapes-desc" style="opacity:.9;margin:.5rem 0 0"></p>
-</div>
-
-
-    <div class="card wide">
-  <h2>UFO reports by year (interactive focus + context)</h2>
-  <div id="yearly" class="viz"></div>
-  <p id="yearly-desc" style="opacity:.9;margin:.5rem 0 0"></p>
-</div>
+<script>document.getElementById('today').textContent = new Date().toLocaleDateString();</script>
 
 <script>
 /* ---------- PATHS & HELPERS ---------- */
@@ -95,10 +165,6 @@ async function fetchFirst(paths){
     }catch(e){ lastErr = e; }
   }
   throw lastErr || new Error("All paths failed");
-}
-function setBadge(id, msg, ok=true){
-  const el = document.getElementById(id); if(!el) return;
-  el.textContent = msg; el.className = "badge" + (ok ? "" : " err");
 }
 function smartInt(s){
   const t = String(s ?? '').trim();
@@ -131,10 +197,8 @@ const BLUE = '#38bdf8';
 /* ---------- A) STATE CHOROPLETH ---------- */
 async function renderStateChoropleth(){
   try{
-    const topo = {
-      url:'https://vega.github.io/vega-datasets/data/us-10m.json',
-      format:{ type:'topojson', feature:'states' }
-    };
+    const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
+                   format:{ type:'topojson', feature:'states' } };
     const FIPS = [
       ["AL",1],["AK",2],["AZ",4],["AR",5],["CA",6],["CO",8],["CT",9],["DE",10],["DC",11],
       ["FL",12],["GA",13],["HI",15],["ID",16],["IL",17],["IN",18],["IA",19],["KS",20],
@@ -166,7 +230,7 @@ async function renderStateChoropleth(){
     const counts = [];
     for (const [abbr,n] of byState) counts.push({id:fipsMap.get(abbr), abbr, count:n});
 
-    // === Write a short description (top/bottom states) ===
+    // short description
     const fmt = new Intl.NumberFormat('en-US').format;
     const sorted = counts.slice().sort((a,b)=>b.count-a.count);
     const top = sorted.slice(0,3).map(d=>`${d.abbr} (${fmt(d.count)})`).join(', ');
@@ -179,9 +243,6 @@ async function renderStateChoropleth(){
         `Highest: ${top}. Lowest: ${bottom}. Larger, more populous states tend to report more sightings.`;
     }
 
-    // (Remove the old green pill, if still present)
-    document.getElementById('b-chor')?.remove();
-
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:1180, height:420,
@@ -193,19 +254,11 @@ async function renderStateChoropleth(){
       mark:{ type:'geoshape', stroke:'#98a0ab', strokeWidth:0.7 },
       encoding:{
         color:{
-          field:'count', type:'quantitative',
-          title:'Total sightings',
+          field:'count', type:'quantitative', title:'Total sightings',
           scale:{ scheme:'blues' },
           legend:{
-            orient:'right',
-            gradientLength:240,
-            tickCount:6,
-            format:',d',
-            titleFontSize:12,
-            labelFontSize:11,
-            // make legend text white to match the dark theme
-            titleColor:'#e5e7eb',
-            labelColor:'#e5e7eb'
+            orient:'right', gradientLength:240, tickCount:6, format:',d',
+            titleColor:'#e5e7eb', labelColor:'#e5e7eb', titleFontSize:12, labelFontSize:11
           }
         },
         tooltip:[
@@ -216,14 +269,11 @@ async function renderStateChoropleth(){
       projection:{ type:'albersUsa' },
       config:{ background:null }
     };
-
     await vegaEmbed('#chor', spec, {actions:false});
-  }catch(e){
-    console.error('Choropleth error:', e);
-  }
+  }catch(e){ console.error('Choropleth error:', e); }
 }
 
-/* ---------- B) CITY BUBBLE MAP (from ufo_cities_latlon.csv) ---------- */
+/* ---------- B) CITY BUBBLE MAP ---------- */
 async function renderMapFromCities(){
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
@@ -237,19 +287,18 @@ async function renderMapFromCities(){
     const pick = (...names)=> names.map(n=>head.indexOf(n)).find(i=>i>=0);
 
     const iCity = pick('city');
-    const iState = pick('state','region');
+    theState = pick('state','region');
     const iCountry = pick('country');
     const iLat = pick('latitude','lat');
     const iLon = pick('longitude','lon','lng','long');
     const iCnt = pick('count','sightings','total','value');
-    if ([iCity,iState,iCountry,iLat,iLon,iCnt].some(i=>i===undefined)) throw new Error('Missing columns');
+    if ([iCity,theState,iCountry,iLat,iLon,iCnt].some(i=>i===undefined)) throw new Error('Missing columns');
 
-    // group duplicates city|state and sum counts
     const byKey = new Map();
     for (const r of rows){
       if ((r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
       const city = (r[iCity]||'').trim();
-      const state = (r[iState]||'').trim();
+      const state = (r[theState]||'').trim();
       const lat = smartDeg((r[iLat]||'').replace(',', '.'));
       const lon = smartDeg((r[iLon]||'').replace(',', '.'));
       const count = smartInt(r[iCnt]);
@@ -266,9 +315,8 @@ async function renderMapFromCities(){
       city:d.city, state:d.state, lat:d.latSum/d.n, lon:d.lonSum/d.n, count:d.count
     }));
     values.sort((a,b)=>b.count-a.count);
-    values = values.slice(0, 300); // top 300 for readability
+    values = values.slice(0, 300);
 
-    // write a short paragraph from the data (top cities)
     const fmt = new Intl.NumberFormat('en-US').format;
     const top5 = values.slice(0,5).map(d => `${d.city}, ${d.state} (${fmt(d.count)})`).join(', ');
     const totalTop = values.reduce((s,d)=>s+d.count,0);
@@ -276,11 +324,9 @@ async function renderMapFromCities(){
     if (desc) {
       desc.textContent =
         `Each bubble marks a city; bubble size encodes total reports. ` +
-        `This view shows the top 300 cities by sightings (covering ${fmt(totalTop)} reports). ` +
-        `Leaders include: ${top5}.`;
+        `This view shows the top 300 cities by sightings (covering ${fmt(totalTop)} reports). Leaders include: ${top5}.`;
     }
 
-    // cap bubble sizes at the 99th percentile (robust to outliers)
     const counts = values.map(d=>d.count).filter(n=>n>0).sort((a,b)=>a-b);
     const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1;
     const domainMax = Math.max(1, q99);
@@ -301,41 +347,24 @@ async function renderMapFromCities(){
               field:'count_capped', type:'quantitative',
               scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,800] },
               title:'City sightings',
-              legend:{
-                orient:'right',
-                format:',d',
-                labelColor:'#e5e7eb',   // white-ish labels on dark
-                titleColor:'#e5e7eb',
-                symbolStrokeColor:'#0b1220',
-                symbolStrokeWidth:0.6
-              }
+              legend:{ orient:'right', format:',d', labelColor:'#e5e7eb', titleColor:'#e5e7eb',
+                       symbolStrokeColor:'#0b1220', symbolStrokeWidth:0.6 }
             },
-            color:{ value:'#38bdf8' },
-            tooltip:[
-              {field:'city', title:'City'},
-              {field:'state', title:'State'},
-              {field:'count', type:'quantitative', title:'Reports', format:',d'}
-            ]
+            color:{ value: BLUE },
+            tooltip:[ {field:'city', title:'City'}, {field:'state', title:'State'},
+                      {field:'count', type:'quantitative', title:'Reports', format:',d'} ]
           }
         }
       ],
       config:{ background:null }
     };
-
     await vegaEmbed('#citiesmap', spec, {actions:false});
-
-    // if any old badge span exists, remove it
-    document.getElementById('b-citiesmap')?.remove();
-
-  }catch(e){
-    console.error('Cities map error:', e);
-  }
+  }catch(e){ console.error('Cities map error:', e); }
 }
 
-/* ---------- OTHER CHARTS (unchanged) ---------- */
+/* ---------- C) MONTHLY ---------- */
 async function renderMonthly(){
   try{
-    // --- try the monthly CSV first ---
     const tryMonthly = async ()=>{
       const {url, text} = await fetchFirst(PATHS.monthly);
       const first = (text.split(/\r?\n/)[0]||'');
@@ -352,7 +381,6 @@ async function renderMonthly(){
       return { url, values };
     };
 
-    // --- fallback: build months from raw scrubbed.csv ---
     const buildFromRaw = async ()=>{
       const {url, text} = await fetchFirst(PATHS.raw);
       const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';')?';':',';
@@ -376,15 +404,14 @@ async function renderMonthly(){
     };
 
     let {url, values} = await tryMonthly();
-    if (!values.length){ const built = await buildFromRaw(); url = built.url; values = built.values; setBadge("b-monthly", `built ${values.length} months from ${url}`); }
-    else { setBadge("b-monthly", `loaded ${values.length} rows from ${url}`); }
+    if (!values.length){ const built = await buildFromRaw(); url = built.url; values = built.values; }
 
     if (!values.length){
       document.getElementById('monthly').innerHTML = '<p style="opacity:.75">No valid monthly data found.</p>';
       return;
     }
 
-    // compute 12-month moving average
+    // 12-month moving average
     const mv = [];
     let run = 0;
     for (let i=0;i<values.length;i++){
@@ -393,36 +420,37 @@ async function renderMonthly(){
       mv.push({ date: values[i].date, avg12: (i>=11) ? run/12 : null });
     }
 
-    // stats for paragraph
+    // paragraph
     const fmt = new Intl.NumberFormat('en-US').format;
     const firstDate = values[0].date, lastDate = values[values.length-1].date;
     const total = values.reduce((s,d)=>s+d.count,0);
     const peak = values.reduce((a,b)=> b.count>a.count?b:a, values[0]);
-
-    // write paragraph
     const p = document.getElementById('monthly-desc');
     if (p){
       const span = `${firstDate.getFullYear()}–${lastDate.getFullYear()}`;
-      p.textContent = `Monthly UFO reports show a long, low baseline through mid-century, rising sharply from the late 1990s into the 2000s. `
-        + `This series spans ${span}, totalling ${fmt(total)} reports. The single highest month is `
-        + `${peak.date.toLocaleString('en-US',{year:'numeric',month:'short'})} with ${fmt(peak.count)} reports. `
-        + `The 12-month average (line) smooths out seasonal spikes.`;
+      p.textContent =
+        `Monthly UFO reports show a long, low baseline through mid-century, rising sharply from the late 1990s into the 2000s. ` +
+        `This series spans ${span}, totalling ${fmt(total)} reports. Peak month: ` +
+        `${peak.date.toLocaleString('en-US',{year:'numeric',month:'short'})} with ${fmt(peak.count)} reports. ` +
+        `The 12-month average (line) smooths out seasonal spikes.`;
     }
 
-    // render chart (full width, readable axes, white labels)
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:1180, height:360,
       data:{ values },
       layer:[
         { mark:{ type:'area', opacity:0.12, color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal',title:'Month', axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}},
-                     y:{field:'count',type:'quantitative',title:'Sightings', axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}} } },
+          encoding:{ x:{field:'date',type:'temporal',title:'Month',
+                       axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}},
+                     y:{field:'count',type:'quantitative',title:'Sightings',
+                       axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}} } },
         { mark:{ type:'line', color:BLUE, strokeWidth:1.2 },
           encoding:{ x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'} } },
         { mark:{ type:'point', color:BLUE, opacity:0.5, size:12 },
           encoding:{ x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'},
-                     tooltip:[{field:'date',type:'temporal',title:'Month'},{field:'count',type:'quantitative',title:'Reports'}] } },
+                     tooltip:[{field:'date',type:'temporal',title:'Month'},
+                              {field:'count',type:'quantitative',title:'Reports'}] } },
         { data:{ values: mv.filter(d=>d.avg12!=null) },
           mark:{ type:'line', color:'#9dd6ff', strokeWidth:2 },
           encoding:{ x:{field:'date',type:'temporal'}, y:{field:'avg12',type:'quantitative', title:'12-mo average'} } }
@@ -430,11 +458,10 @@ async function renderMonthly(){
       config:{ background:null, axis:{gridColor:'#1f2937'} }
     };
     await vegaEmbed('#monthly', spec, {actions:false});
-  }catch(e){
-    console.error('Monthly error:', e);
-    setBadge('b-monthly','failed to load', false);
-  }
+  }catch(e){ console.error('Monthly error:', e); }
 }
+
+/* ---------- D) HOURLY (radial) ---------- */
 async function renderHourly(){
   try{
     const {url,text} = await fetchFirst(PATHS.hourly);
@@ -447,64 +474,43 @@ async function renderHourly(){
 
     let values = rows.map(c=>({hour:+c[iH], count:smartInt(c[iC])}))
                      .filter(d=>Number.isFinite(d.hour)&&Number.isFinite(d.count));
-    // ensure hours 0–23 present (balanced layout)
     const have = new Set(values.map(d=>d.hour));
     for (let h=0; h<24; h++) if(!have.has(h)) values.push({hour:h, count:0});
     values = values.sort((a,b)=>a.hour-b.hour);
 
-    // render radial bar (theta = hour band, radius = count)
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:560, height:420,
       data:{ values },
-      // nicer labels: 00–23
       transform:[{ calculate:'format(datum.hour,"02")', as:'hlabel' }],
       layer:[
         {
           mark:{ type:'arc', innerRadius:80, cornerRadius:3, stroke:'#0b1220', strokeWidth:0.6 },
           encoding:{
-            theta:{ field:'hlabel', type:'nominal', sort:null, title:null },   // equal slices
+            theta:{ field:'hlabel', type:'nominal', sort:null, title:null },
             radius:{ field:'count', type:'quantitative', title:'Reports',
-                     scale:{ rangeMin:80, rangeMax:190 } },                    // radial bar length
-            color:{ field:'count', type:'quantitative',
-                    title:'Reports',
-                    scale:{ scheme:'cividis' },                                 // color-blind friendly
-                    legend:{
-                      orient:'right',
-                      tickCount:5,
-                      format:',d',
-                      titleColor:'#e5e7eb',
-                      labelColor:'#e5e7eb',
-                      gradientLength:160
-                    }},
-            tooltip:[
-              { field:'hour', title:'Hour (00–23)'},
-              { field:'count', type:'quantitative', title:'Reports', format:',d'}
-            ]
+                     scale:{ rangeMin:80, rangeMax:190 } },
+            color:{ field:'count', type:'quantitative', title:'Reports',
+                    scale:{ scheme:'cividis' },
+                    legend:{ orient:'right', tickCount:5, format:',d',
+                             titleColor:'#e5e7eb', labelColor:'#e5e7eb', gradientLength:160 } },
+            tooltip:[ { field:'hour', title:'Hour (00–23)' },
+                      { field:'count', type:'quantitative', title:'Reports', format:',d'} ]
           }
         },
-        // hour ticks around the rim for readability
         {
           mark:{ type:'text', radius:205, fontSize:10, fill:'#e5e7eb' },
-          encoding:{
-            theta:{ field:'hlabel', type:'nominal', sort:null },
-            text:{ field:'hlabel' }
-          }
+          encoding:{ theta:{ field:'hlabel', type:'nominal', sort:null }, text:{ field:'hlabel' } }
         }
       ],
       view:{ stroke:null },
-      config:{
-        background:null,
-        axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb' }
-      }
+      config:{ background:null, axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb' } }
     };
-
     await vegaEmbed('#hourly', spec, {actions:false});
-  }catch(e){
-    console.error('Hourly error:', e);
-    setBadge('b-hourly','failed to load', false); // safe if badge still exists
-  }
+  }catch(e){ console.error('Hourly error:', e); }
 }
+
+/* ---------- E) TOP 10 CITIES (ranking) ---------- */
 async function renderCities(){
   try{
     const {url,text} = await fetchFirst(PATHS.cities);
@@ -520,16 +526,12 @@ async function renderCities(){
       .sort((a,b)=>b.count-a.count)
       .slice(0, 10);
 
-    // Title case for display (keeps key lowercased for color test)
     const titleCase = s => s.replace(/\b\w/g, m=>m.toUpperCase());
     values = values.map(d => ({...d, cityLabel: titleCase(d.city)}));
 
-    // stats for paragraph
     const top = values[0];
     const totalTop10 = values.reduce((s,d)=>s+d.count,0);
     const fmt = new Intl.NumberFormat('en-US').format;
-
-    // Write a short, helpful paragraph
     const desc = document.getElementById('cities-desc');
     if (desc){
       const list = values.slice(0,5).map(d=>`${titleCase(d.city)} (${fmt(d.count)})`).join(', ');
@@ -537,55 +539,38 @@ async function renderCities(){
         + `Together, the top ten account for ${fmt(totalTop10)} reports. Notable hotspots include ${list}.`;
     }
 
-    // remove old badge if still present
-    document.getElementById('b-cities')?.remove();
-
-    const BLUE = '#38bdf8';                 // accent for the #1 city
-    const GREY = '#64748b';                 // neutral bars for the rest
+    const GREY = '#64748b';
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width: 620,
-      height: 360,
+      width: 620, height: 360,
       padding: {left: 90, right: 20, top: 10, bottom: 30},
       data:{ values },
       layer: [
-        // bars
         {
           mark:{ type:'bar', cornerRadiusEnd: 4 },
           encoding:{
-            y:{ field:'cityLabel', type:'nominal', sort:'-x', title:null,
-                axis:{labelColor:'#e5e7eb'} },
+            y:{ field:'cityLabel', type:'nominal', sort:'-x', title:null, axis:{labelColor:'#e5e7eb'} },
             x:{ field:'count', type:'quantitative', title:'Reports',
                 axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb', gridColor:'#1f2937'} },
-            color:{
-              condition:{ test:`datum.city === '${top.city}'`, value: BLUE },
-              value: GREY
-            },
-            tooltip:[
-              {field:'cityLabel', title:'City'},
-              {field:'count', type:'quantitative', title:'Reports', format:',d'}
-            ]
+            color:{ condition:{ test:`datum.city === '${top.city}'`, value: BLUE }, value: GREY },
+            tooltip:[ {field:'cityLabel', title:'City'},
+                      {field:'count', type:'quantitative', title:'Reports', format:',d'} ]
           }
         },
-        // value labels at the end of bars
-        {
-          mark:{ type:'text', align:'left', dx:6, dy:0, fontSize:11, fill:'#e5e7eb' },
-          encoding:{
-            y:{ field:'cityLabel', type:'nominal', sort:'-x' },
-            x:{ field:'count', type:'quantitative' },
-            text:{ field:'count', type:'quantitative', format:',d' }
-          }
+        { mark:{ type:'text', align:'left', dx:6, fontSize:11, fill:'#e5e7eb' },
+          encoding:{ y:{ field:'cityLabel', type:'nominal', sort:'-x' },
+                     x:{ field:'count', type:'quantitative' },
+                     text:{ field:'count', type:'quantitative', format:',d' } }
         }
       ],
       config:{ background:null, view:{stroke:null} }
     };
-
     await vegaEmbed('#cities', spec, {actions:false});
-  }catch(e){
-    console.error('Cities error:', e);
-  }
+  }catch(e){ console.error('Cities error:', e); }
 }
+
+/* ---------- F) SHAPES (lollipop) ---------- */
 async function renderShapes(){
   try{
     const {url,text} = await fetchFirst(PATHS.shapes);
@@ -601,87 +586,53 @@ async function renderShapes(){
       .filter(r=>r.shape && Number.isFinite(r.count))
       .sort((a,b)=>b.count-a.count);
 
-    // title-case labels
     const titleCase = s => s.replace(/\b\w/g, m=>m.toUpperCase());
     values = values.map(d=>({ ...d, label: titleCase(d.shape) }));
 
-    // Top 5 list for paragraph + highlighting flag
     const top5 = values.slice(0,5).map(d => ({...d, isTop:true}));
     const setTop = new Set(top5.map(d=>d.shape));
     values = values.map(d => ({...d, isTop: setTop.has(d.shape)}));
 
-    // Write paragraph (top 5 + coverage)
     const fmt = new Intl.NumberFormat('en-US').format;
     const top5Text = values.slice(0,5).map(d => `${d.label} (${fmt(d.count)})`).join(', ');
     const total = values.reduce((s,d)=>s+d.count,0);
     const top5Total = values.slice(0,5).reduce((s,d)=>s+d.count,0);
     const desc = document.getElementById('shapes-desc');
     if (desc){
-      desc.textContent =
-        `Shapes are ranked by the total number of reports. The top five are ${top5Text}, ` +
-        `together accounting for ${fmt(top5Total)} of ${fmt(total)} shape-labelled reports. ` +
-        `The lollipop style keeps labels readable while the dot encodes magnitude.`;
+      desc.textContent = `Shapes are ranked by reports. Top five: ${top5Text}. `
+        + `Together they account for ${fmt(top5Total)} of ${fmt(total)} shape-labelled reports.`;
     }
 
-    // Remove any leftover badge
-    document.getElementById('b-shapes')?.remove();
-
-    const BLUE = '#38bdf8';
     const GREY = '#64748b';
-
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width: 620,
-      height: { step: 22 },                    // balanced vertical spacing
+      width: 620, height: { step: 22 },
       padding: { left: 120, right: 20, top: 10, bottom: 30 },
       data:{ values },
       layer:[
-        // stems (neutral grey)
-        {
-          mark:{ type:'rule', stroke:'#94a3b8', strokeWidth:2 },
-          encoding:{
-            y:{ field:'label', type:'nominal', sort:'-x', title:null,
-                axis:{ labelColor:'#e5e7eb' } },
-            x:{ field:'count', type:'quantitative', title:'Reports',
-                axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb', gridColor:'#1f2937' } },
-            x2:{ value:0 }
-          }
-        },
-        // dots (accent for Top 5, grey otherwise)
-        {
-          mark:{ type:'point', filled:true, size:80 },
-          encoding:{
-            y:{ field:'label', type:'nominal', sort:'-x' },
-            x:{ field:'count', type:'quantitative' },
-            color:{
-              condition:{ test:'datum.isTop', value: BLUE },
-              value: GREY
-            },
-            tooltip:[
-              { field:'label', title:'Shape' },
-              { field:'count', type:'quantitative', title:'Reports', format:',d' }
-            ]
-          }
-        },
-        // value labels to the right of dots
-        {
-          mark:{ type:'text', align:'left', dx:6, fontSize:11, fill:'#e5e7eb' },
-          encoding:{
-            y:{ field:'label', type:'nominal', sort:'-x' },
-            x:{ field:'count', type:'quantitative' },
-            text:{ field:'count', type:'quantitative', format:',d' }
-          }
-        }
+        { mark:{ type:'rule', stroke:'#94a3b8', strokeWidth:2 },
+          encoding:{ y:{ field:'label', type:'nominal', sort:'-x', title:null, axis:{ labelColor:'#e5e7eb' } },
+                     x:{ field:'count', type:'quantitative', title:'Reports',
+                         axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb', gridColor:'#1f2937' } },
+                     x2:{ value:0 } } },
+        { mark:{ type:'point', filled:true, size:80 },
+          encoding:{ y:{ field:'label', type:'nominal', sort:'-x' },
+                     x:{ field:'count', type:'quantitative' },
+                     color:{ condition:{ test:'datum.isTop', value: BLUE }, value: GREY },
+                     tooltip:[ { field:'label', title:'Shape' },
+                               { field:'count', type:'quantitative', title:'Reports', format:',d' } ] } },
+        { mark:{ type:'text', align:'left', dx:6, fontSize:11, fill:'#e5e7eb' },
+          encoding:{ y:{ field:'label', type:'nominal', sort:'-x' },
+                     x:{ field:'count', type:'quantitative' },
+                     text:{ field:'count', type:'quantitative', format:',d' } } }
       ],
       config:{ background:null, view:{ stroke:null } }
     };
-
     await vegaEmbed('#shapes', spec, { actions:false });
-  }catch(e){
-    console.error('Shapes error:', e);
-    setBadge('b-shapes','failed to load', false);
-  }
+  }catch(e){ console.error('Shapes error:', e); }
 }
+
+/* ---------- G) YEARLY (focus+context) ---------- */
 async function renderYearly(){
   try{
     const {url,text} = await fetchFirst(PATHS.yearly);
@@ -696,7 +647,6 @@ async function renderYearly(){
                      .filter(d=>Number.isFinite(d.year)&&Number.isFinite(d.count))
                      .sort((a,b)=>a.year-b.year);
 
-    // stats for description + 5-year moving average
     const fmt = new Intl.NumberFormat('en-US').format;
     const span = values.length ? `${values[0].year}–${values[values.length-1].year}` : '';
     const total = values.reduce((s,d)=>s+d.count,0);
@@ -709,21 +659,15 @@ async function renderYearly(){
       ma5.push({year: values[i].year, avg5: (i>=4) ? run/5 : null});
     }
 
-    // paragraph
     const p = document.getElementById('yearly-desc');
     if (p){
       p.textContent =
         `Annual reports show a long quiet period through the mid-20th century, then a rapid rise from the late 1990s into the 2000s. ` +
         `This series spans ${span} with ${fmt(total)} total sightings. Peak year: ${peak.year} (${fmt(peak.count)} reports). ` +
-        `Use the brush below to zoom into any period; the pale line shows the 5-year average.`;
+        `Use the brush below to zoom; the pale line shows the 5-year average.`;
     }
 
-    // remove old badge if it still exists
-    document.getElementById('b-year')?.remove();
-
-    const BLUE = '#38bdf8';
-
-    // Focus + context (interactive brush) with tooltips & hover highlight
+    const PEAK_YEAR = peak.year;
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       vconcat: [
@@ -735,7 +679,6 @@ async function renderYearly(){
             { name: "brush", select: {type:"interval", encodings:["x"]} }
           ],
           layer: [
-            // area for subtle figure-ground
             { mark:{type:'area', opacity:0.10, color:BLUE},
               encoding:{
                 x:{field:'year', type:'quantitative', title:'Year',
@@ -744,65 +687,54 @@ async function renderYearly(){
                    axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}}
               }
             },
-            // line
             { mark:{type:'line', color:BLUE, strokeWidth:1.5},
-              encoding:{
-                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                y:{field:'count', type:'quantitative'}
-              }
+              encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                         y:{field:'count', type:'quantitative'} }
             },
-            // moving average
             { data:{values: ma5.filter(d=>d.avg5!=null)},
               mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
-              encoding:{
-                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                y:{field:'avg5', type:'quantitative', title:'5-yr average'}
-              }
+              encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                         y:{field:'avg5', type:'quantitative', title:'5-yr average'} }
             },
-            // points on hover
             { mark:{type:'point', filled:true, size:40, color:BLUE},
-              encoding:{
-                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                y:{field:'count', type:'quantitative'},
-                opacity:{ condition:{param:'hover', empty:false, value:1}, value:0 }
-              }
+              encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                         y:{field:'count', type:'quantitative'},
+                         opacity:{ condition:{param:'hover', empty:false, value:1}, value:0 } }
             },
-            // tooltips
             { mark:{type:'point', opacity:0},
-              encoding:{
-                x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                y:{field:'count', type:'quantitative'},
-                tooltip:[
-                  {field:'year', title:'Year'},
-                  {field:'count', type:'quantitative', title:'Reports', format:',d'}
-                ]
-              }
-            }
+              encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                         y:{field:'count', type:'quantitative'},
+                         tooltip:[ {field:'year', title:'Year'},
+                                   {field:'count', type:'quantitative', title:'Reports', format:',d'} ] }
+            },
+            /* peak annotation */
+            { data:{ values:[ { x: PEAK_YEAR } ] },
+              mark:{ type:'rule', stroke:'#e5e7eb', strokeDash:[4,3] },
+              encoding:{ x:{ field:'x', type:'quantitative', scale:{domain:{param:'brush'}} } } },
+            { data:{ values:[ { x: PEAK_YEAR, y: peak.count, txt:`Peak ${peak.year}` } ] },
+              mark:{ type:'text', dy:-12, fontSize:11, fill:'#e5e7eb', fontWeight:600 },
+              encoding:{ x:{ field:'x', type:'quantitative', scale:{domain:{param:'brush'}} },
+                         y:{ field:'y', type:'quantitative' },
+                         text:{ field:'txt' } } }
           ],
           config:{ background:null, axis:{gridColor:'#1f2937'} }
         },
-        // context brush below
         {
           width:1180, height:90,
           data:{ values },
           mark:{ type:'area', opacity:0.15, color:BLUE },
           params:[ { name:"brush", select:{type:"interval", encodings:["x"]} } ],
           encoding:{
-            x:{ field:'year', type:'quantitative', title:null,
-                axis:{labels:false,ticks:false,domain:false} },
-            y:{ field:'count', type:'quantitative', title:null,
-                axis:{labels:false,ticks:false,domain:false} }
+            x:{ field:'year', type:'quantitative', title:null, axis:{labels:false,ticks:false,domain:false} },
+            y:{ field:'count', type:'quantitative', title:null, axis:{labels:false,ticks:false,domain:false} }
           },
           config:{ background:null, view:{stroke:null} }
         }
       ],
       config:{ background:null }
     };
-
     await vegaEmbed('#yearly', spec, {actions:false});
-  }catch(e){
-    console.error('Yearly error:', e);
-  }
+  }catch(e){ console.error('Yearly error:', e); }
 }
 
 /* ---------- RUN ALL ---------- */
