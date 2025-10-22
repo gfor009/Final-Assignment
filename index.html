@@ -42,10 +42,11 @@
 </div>
 
     <!-- Other charts -->
-    <div class="card">
-      <h2>Monthly trend <span id="b-monthly" class="badge">checking…</span></h2>
-      <div id="monthly" class="viz"></div>
-    </div>
+    <div class="card wide">
+  <h2>Monthly UFO reports in the U.S.</h2>
+  <div id="monthly" class="viz"></div>
+  <p id="monthly-desc" style="opacity:.9;margin:.5rem 0 0"></p>
+</div>
 
     <div class="card">
       <h2>Hourly rhythm (radial) <span id="b-hourly" class="badge">checking…</span></h2>
@@ -331,88 +332,99 @@ async function renderMapFromCities(){
 /* ---------- OTHER CHARTS (unchanged) ---------- */
 async function renderMonthly(){
   try{
-    // --- 1) try ufo_monthly.csv if present/valid ---
+    // --- try the monthly CSV first ---
     const tryMonthly = async ()=>{
       const {url, text} = await fetchFirst(PATHS.monthly);
-      const delim = (text.split(/\r?\n/)[0]||'').includes(';') ? ';' : ',';
+      const first = (text.split(/\r?\n/)[0]||'');
+      const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
       const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-      const head = rows.shift()?.map(h=>h.trim().toLowerCase()) || [];
+      const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
       const find = (names)=>{ for(const n of names){ const i=head.indexOf(n); if(i>=0) return i; } return -1; };
       const iM = find(['month','date']), iC = find(['count','total','value','sightings']);
       if (iM < 0 || iC < 0) return { url, values: [] };
-
-      const values = rows.map(c=>{
-        const k = ymKey(c[iM]); const cnt = smartInt(c[iC]);
-        return k && isFinite(cnt) ? { date:new Date(k+'-01'), count:cnt } : null;
-      }).filter(Boolean);
-
+      const values = rows.map(r=>{
+        const k = ymKey(r[iM]); const c = smartInt(r[iC]);
+        return (k && Number.isFinite(c)) ? { date:new Date(k+'-01'), count:c } : null;
+      }).filter(Boolean).sort((a,b)=>a.date-b.date);
       return { url, values };
     };
 
-    // --- 2) fallback: build months from scrubbed.csv (datetime) ---
+    // --- fallback: build months from raw scrubbed.csv ---
     const buildFromRaw = async ()=>{
       const {url, text} = await fetchFirst(PATHS.raw);
-      const first = (text.split(/\r?\n/)[0]||'');
-      const delim = first.includes(';') ? ';' : ',';
+      const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';')?';':',';
       const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-      const head = rows.shift()?.map(h=>h.trim().toLowerCase()) || [];
+      const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
       const idx = n => head.indexOf(n);
-
-      // likely column names in NUFORC-style data
       const iCountry = idx('country');
       const iDT = [idx('datetime'), idx('date_time'), idx('date'), idx('occurred'), idx('sighted_at')]
                     .reduce((a,b)=>a>=0?a:b, -1);
-
       if (iDT < 0) return { url, values: [] };
-
       const byYM = new Map();
       for (const r of rows){
         if (iCountry >= 0 && (r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
-        const k = ymKey(r[iDT]);
-        if (!k) continue;
+        const k = ymKey(r[iDT]); if (!k) continue;
         byYM.set(k, (byYM.get(k)||0) + 1);
       }
       const values = [...byYM.entries()]
-        .map(([k,c]) => ({ date:new Date(k+'-01'), count:c }))
+        .map(([k,c])=>({ date:new Date(k+'-01'), count:c }))
         .sort((a,b)=>a.date-b.date);
-
       return { url, values };
     };
 
-    // try monthly file; if empty, build from raw
     let {url, values} = await tryMonthly();
-    if (!values.length){
-      const built = await buildFromRaw();
-      url = built.url; values = built.values;
-      setBadge("b-monthly", `built ${values.length} months from ${url}`);
-    }else{
-      setBadge("b-monthly", `loaded ${values.length} rows from ${url}`);
-    }
+    if (!values.length){ const built = await buildFromRaw(); url = built.url; values = built.values; setBadge("b-monthly", `built ${values.length} months from ${url}`); }
+    else { setBadge("b-monthly", `loaded ${values.length} rows from ${url}`); }
 
     if (!values.length){
-      document.getElementById('monthly').innerHTML =
-        '<p style="opacity:.75">No valid monthly data found.</p>';
+      document.getElementById('monthly').innerHTML = '<p style="opacity:.75">No valid monthly data found.</p>';
       return;
     }
 
-    // render chart
+    // compute 12-month moving average
+    const mv = [];
+    let run = 0;
+    for (let i=0;i<values.length;i++){
+      run += values[i].count;
+      if (i>=12) run -= values[i-12].count;
+      mv.push({ date: values[i].date, avg12: (i>=11) ? run/12 : null });
+    }
+
+    // stats for paragraph
+    const fmt = new Intl.NumberFormat('en-US').format;
+    const firstDate = values[0].date, lastDate = values[values.length-1].date;
+    const total = values.reduce((s,d)=>s+d.count,0);
+    const peak = values.reduce((a,b)=> b.count>a.count?b:a, values[0]);
+
+    // write paragraph
+    const p = document.getElementById('monthly-desc');
+    if (p){
+      const span = `${firstDate.getFullYear()}–${lastDate.getFullYear()}`;
+      p.textContent = `Monthly UFO reports show a long, low baseline through mid-century, rising sharply from the late 1990s into the 2000s. `
+        + `This series spans ${span}, totalling ${fmt(total)} reports. The single highest month is `
+        + `${peak.date.toLocaleString('en-US',{year:'numeric',month:'short'})} with ${fmt(peak.count)} reports. `
+        + `The 12-month average (line) smooths out seasonal spikes.`;
+    }
+
+    // render chart (full width, readable axes, white labels)
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:560, height:340,
+      width:1180, height:360,
       data:{ values },
       layer:[
-        { mark:{ type:'area', opacity:0.15, color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal',title:'Month'},
-                     y:{field:'count',type:'quantitative',title:'Sightings'} } },
-        { mark:{ type:'line', color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal'},
-                     y:{field:'count',type:'quantitative'} } },
-        { mark:{ type:'point', color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal'},
-                     y:{field:'count',type:'quantitative'},
-                     tooltip:[{field:'date',type:'temporal'},{field:'count',type:'quantitative'}] } }
+        { mark:{ type:'area', opacity:0.12, color:BLUE },
+          encoding:{ x:{field:'date',type:'temporal',title:'Month', axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}},
+                     y:{field:'count',type:'quantitative',title:'Sightings', axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}} } },
+        { mark:{ type:'line', color:BLUE, strokeWidth:1.2 },
+          encoding:{ x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'} } },
+        { mark:{ type:'point', color:BLUE, opacity:0.5, size:12 },
+          encoding:{ x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'},
+                     tooltip:[{field:'date',type:'temporal',title:'Month'},{field:'count',type:'quantitative',title:'Reports'}] } },
+        { data:{ values: mv.filter(d=>d.avg12!=null) },
+          mark:{ type:'line', color:'#9dd6ff', strokeWidth:2 },
+          encoding:{ x:{field:'date',type:'temporal'}, y:{field:'avg12',type:'quantitative', title:'12-mo average'} } }
       ],
-      config:{ background:null }
+      config:{ background:null, axis:{gridColor:'#1f2937'} }
     };
     await vegaEmbed('#monthly', spec, {actions:false});
   }catch(e){
