@@ -141,7 +141,7 @@
 
     <!-- WHEN: Yearly focus + context (interactive) -->
     <article class="card">
-      <h2>Yearly trend (interactive focus + context)</h2>
+      <h2>Yearly trend</h2>
       <div id="yearly" class="viz" aria-label="Yearly series with 5-year average and brush"></div>
       <p id="yearly-desc" class="caption"></p>
     </article>
@@ -539,16 +539,16 @@ async function renderShapes(){
 
 /* ---------------- G) YEARLY — focus + context (brush) ---------------- */
 async function renderYearly(){
-  // csv helper
+  // --- tiny CSV helper ---
   const parseCSV = (text) => {
     const first = (text.split(/\r?\n/)[0]||'');
     const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
-    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-    const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
+    const rows  = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
+    const head  = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
     return { head, rows };
   };
 
-  // Try tidy yearly file
+  // Try tidy yearly file first
   async function loadYearCSV(){
     try{
       const {text} = await fetchFirst(PATHS.yearly);
@@ -562,7 +562,7 @@ async function renderYearly(){
     }catch{ return []; }
   }
 
-  // Fallback: build from scrubbed.csv (US only)
+  // Fallback: build per-year counts from scrubbed.csv (US only)
   async function buildFromRaw(){
     try{
       const {text} = await fetchFirst(PATHS.raw);
@@ -584,7 +584,7 @@ async function renderYearly(){
     }catch{ return []; }
   }
 
-  // Get data
+  // ---- get data ----
   let values = await loadYearCSV();
   if (!values.length) values = await buildFromRaw();
 
@@ -596,11 +596,10 @@ async function renderYearly(){
 
   // Stats + caption
   const fmt = new Intl.NumberFormat('en-US').format;
-  const span = `${values[0].year}–${values[values.length-1].year}`;
   const total = values.reduce((s,d)=>s+d.count,0);
-  const peak = values.reduce((a,b)=> (b.count>a.count?b:a), values[0]);
+  const peak  = values.reduce((a,b)=> (b.count>a.count?b:a), values[0]);
 
-  // 5-yr average
+  // 5-year moving average
   const ma5 = [];
   for (let i=0, run=0; i<values.length; i++){
     run += values[i].count;
@@ -610,11 +609,28 @@ async function renderYearly(){
 
   const p = document.getElementById('yearly-desc');
   if (p){
-    p.textContent = `Each point on the chart shows the total number of UFO reports for a given year. The trend stays relatively flat through much of the mid-20th century, then rises sharply from the late 1990s into the 2000s before gradually easing off. The dashed line represents a five-year moving average, which smooths out short-term fluctuations to make the long-term pattern easier to see. You can use the brush in the lower panel to zoom into any period, which filters the main chart to that span, and hovering over the line shows the exact year and report count. This chart reveals more than just sightings; it reflects social and technological factors such as media coverage, reporting channels, and the spread of the internet that have shaped how and when people report UFOs over time.`;
+    p.textContent =
+      "Each point shows the total number of UFO reports for a year. The line is mostly flat through the mid-century, " +
+      "then climbs sharply from the late 1990s into the 2000s before easing off. The dashed line is a five-year moving " +
+      "average to smooth short-term spikes. Use the brush below to zoom a period; hover to see exact counts. " +
+      `Total reports shown: ${fmt(total)}. Peak: ${peak.year} (${fmt(peak.count)}).`;
   }
 
-  // Focus+context spec
-  const PEAK_YEAR = peak.year;
+  // --- Legend scaffolding: shared scales to render a tiny 2-item legend ---
+  const colorLegendScale = {
+    name: 'seriesColor',
+    type: 'ordinal',
+    domain: ['Reports', '5-yr avg'],
+    range: ['#38bdf8', '#9dd6ff']
+  };
+  const dashLegendScale = {
+    name: 'seriesDash',
+    type: 'ordinal',
+    domain: ['Reports', '5-yr avg'],
+    range: [[], [4,3]]
+  };
+
+  // ---------- focus + context (with legend) ----------
   const focusContext = {
     $schema:'https://vega.github.io/schema/vega-lite/v5.json',
     vconcat: [
@@ -626,34 +642,52 @@ async function renderYearly(){
           { name: "brush", select: {type:"interval", encodings:["x"]} }
         ],
         layer: [
+          // Legend-only layer (invisible marks; shows two legend entries)
+          {
+            data:{ values:[ {series:'Reports'}, {series:'5-yr avg'} ] },
+            mark:{ type:'rule', opacity: 0 },
+            encoding:{
+              color:     { field:'series', type:'nominal', scale:{name:'seriesColor'},
+                           legend:{ title:'Series', orient:'top-left', labelColor:'#e5e7eb', titleColor:'#e5e7eb' } },
+              strokeDash:{ field:'series', type:'nominal', scale:{name:'seriesDash'} }
+            }
+          },
+          // Area under counts
           { mark:{type:'area', opacity:0.10, color:'#38bdf8'},
             encoding:{
               x:{field:'year', type:'quantitative', title:'Year',
                  axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}, scale:{domain:{param:"brush"}}},
               y:{field:'count', type:'quantitative', title:'Sightings',
                  axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}}
-            } },
+            }
+          },
+          // Count line (solid)
           { mark:{type:'line', color:'#38bdf8', strokeWidth:1.5},
             encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'count', type:'quantitative'} } },
+                       y:{field:'count', type:'quantitative'} }
+          },
+          // 5-yr average (dashed)
           { data:{values: ma5.filter(d=>d.avg5!=null)},
             mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
             encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'avg5', type:'quantitative', title:'5-yr average'} } },
-          { mark:{type:'point', filled:true, size:40, color:'#38bdf8'},
-            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'count', type:'quantitative'},
-                       opacity:{ condition:{param:'hover', empty:false, value:1}, value:0 } } },
+                       y:{field:'avg5', type:'quantitative', title:'5-yr average'} }
+          },
+          // Hover points for tooltip
           { mark:{type:'point', opacity:0},
             encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
                        y:{field:'count', type:'quantitative'},
                        tooltip:[ {field:'year', title:'Year'},
-                                 {field:'count', type:'quantitative', title:'Reports', format:',d'} ] } },
-          { data:{ values:[ { x: PEAK_YEAR } ] },
+                                 {field:'count', type:'quantitative', title:'Reports', format:',d'} ] }
+          },
+          // Peak year guideline
+          { data:{ values:[ { x: peak.year } ] },
             mark:{ type:'rule', stroke:'#e5e7eb', strokeDash:[4,3] },
-            encoding:{ x:{ field:'x', type:'quantitative', scale:{domain:{param:'brush'}} } } }
+            encoding:{ x:{ field:'x', type:'quantitative', scale:{domain:{param:'brush'}} } }
+          }
         ],
-        config:{ background:null, axis:{gridColor:'#1f2937'} }
+        config:{ background:null, axis:{gridColor:'#1f2937'} },
+        // register legend scales
+        scales:[colorLegendScale, dashLegendScale]
       },
       {
         width:560, height:90,
@@ -672,12 +706,21 @@ async function renderYearly(){
     config:{ background:null }
   };
 
-  // Simple single-line fallback
+  // ---------- simple fallback (also with legend) ----------
   const simple = {
     $schema:'https://vega.github.io/schema/vega-lite/v5.json',
     width:560, height:320,
     data:{ values },
     layer:[
+      {
+        data:{ values:[ {series:'Reports'}, {series:'5-yr avg'} ] },
+        mark:{ type:'rule', opacity: 0 },
+        encoding:{
+          color:     { field:'series', type:'nominal', scale:{name:'seriesColor'},
+                       legend:{ title:'Series', orient:'top-left', labelColor:'#e5e7eb', titleColor:'#e5e7eb' } },
+          strokeDash:{ field:'series', type:'nominal', scale:{name:'seriesDash'} }
+        }
+      },
       { mark:{ type:'area', opacity:0.10, color:'#38bdf8'},
         encoding:{ x:{field:'year', type:'quantitative', title:'Year',
                        axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}},
@@ -689,17 +732,17 @@ async function renderYearly(){
         mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
         encoding:{ x:{field:'year', type:'quantitative'}, y:{field:'avg5', type:'quantitative'} } }
     ],
-    config:{ background:null, axis:{gridColor:'#1f2937'} }
+    config:{ background:null, axis:{gridColor:'#1f2937'} },
+    scales:[colorLegendScale, dashLegendScale]
   };
 
   try{
-    await vegaEmbed('#yearly', focusContext, {actions:false});
+    await vegaEmbed(mount, focusContext, {actions:false});
   }catch(err){
     console.warn('Focus+context render failed; using fallback chart:', err);
-    await vegaEmbed('#yearly', simple, {actions:false});
+    await vegaEmbed(mount, simple, {actions:false});
   }
 }
-
 /* ---------------- RUN ALL ---------------- */
 Promise.all([
   renderKPIs(),
