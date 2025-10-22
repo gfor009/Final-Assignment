@@ -27,40 +27,50 @@
 <div class="container">
   <h1>UFO Sightings Explorer — USA Focus</h1>
   <p>CSVs can live in <code>/data</code> or the repo root. Badges show what each chart loaded.</p>
-<div class="grid"><!-- START grid -->
-  <div class="card wide">
-    <h2>US density (binned grid) <span id="b-mapbin" class="badge">checking…</span></h2>
-    <div id="mapbin" class="viz" style="min-height:420px"></div>
-  </div>
 
-  <div class="card">
-    <h2>Monthly trend <span id="b-monthly" class="badge">checking…</span></h2>
-    <div id="monthly" class="viz"></div>
-  </div>
+  <div class="grid">
+    <!-- A) STATE CHOROPLETH -->
+    <div class="card wide">
+      <h2>State totals (choropleth) <span id="b-chor" class="badge">checking…</span></h2>
+      <div id="chor" class="viz" style="min-height:420px"></div>
+    </div>
 
-  <div class="card">
-    <h2>Hourly rhythm (radial) <span id="b-hourly" class="badge">checking…</span></h2>
-    <div id="hourly" class="viz"></div>
-  </div>
+    <!-- B) CITY BUBBLE MAP (from ufo_cities_latlon.csv) -->
+    <div class="card wide">
+      <h2>City hotspots (top 300 bubbles) <span id="b-citiesmap" class="badge">checking…</span></h2>
+      <div id="citiesmap" class="viz" style="min-height:420px"></div>
+    </div>
 
-  <div class="card">
-    <h2>Top 10 cities <span id="b-cities" class="badge">checking…</span></h2>
-    <div id="cities" class="viz"></div>
-  </div>
+    <!-- Other charts -->
+    <div class="card">
+      <h2>Monthly trend <span id="b-monthly" class="badge">checking…</span></h2>
+      <div id="monthly" class="viz"></div>
+    </div>
 
-  <div class="card">
-    <h2>Shapes (lollipop) <span id="b-shapes" class="badge">checking…</span></h2>
-    <div id="shapes" class="viz"></div>
-  </div>
+    <div class="card">
+      <h2>Hourly rhythm (radial) <span id="b-hourly" class="badge">checking…</span></h2>
+      <div id="hourly" class="viz"></div>
+    </div>
 
-  <div class="card">
-    <h2>Yearly trend <span id="b-year" class="badge">checking…</span></h2>
-    <div id="yearly" class="viz"></div>
+    <div class="card">
+      <h2>Top 10 cities <span id="b-cities" class="badge">checking…</span></h2>
+      <div id="cities" class="viz"></div>
+    </div>
+
+    <div class="card">
+      <h2>Shapes (lollipop) <span id="b-shapes" class="badge">checking…</span></h2>
+      <div id="shapes" class="viz"></div>
+    </div>
+
+    <div class="card">
+      <h2>Yearly trend <span id="b-year" class="badge">checking…</span></h2>
+      <div id="yearly" class="viz"></div>
+    </div>
   </div>
-</div><!-- END grid -->
+</div>
 
 <script>
-/* ---------- paths & helpers ---------- */
+/* ---------- PATHS & HELPERS ---------- */
 const PATHS = {
   raw:     ["data/scrubbed.csv","scrubbed.csv","https://gfor009.github.io/FIT3179/scrubbed.csv"],
   citiesLatLon: ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"],
@@ -114,77 +124,125 @@ function ymKey(s){
 }
 const BLUE = '#38bdf8';
 
-/* ---------- 1) MAP (build from raw to avoid bad CSV) ---------- */
-async function renderMapBinned(){
+/* ---------- A) STATE CHOROPLETH ---------- */
+async function renderStateChoropleth(){
+  try{
+    const topo = {
+      url:'https://vega.github.io/vega-datasets/data/us-10m.json',
+      format:{ type:'topojson', feature:'states' }
+    };
+    const FIPS = [
+      ["AL",1],["AK",2],["AZ",4],["AR",5],["CA",6],["CO",8],["CT",9],["DE",10],["DC",11],
+      ["FL",12],["GA",13],["HI",15],["ID",16],["IL",17],["IN",18],["IA",19],["KS",20],
+      ["KY",21],["LA",22],["ME",23],["MD",24],["MA",25],["MI",26],["MN",27],["MS",28],
+      ["MO",29],["MT",30],["NE",31],["NV",32],["NH",33],["NJ",34],["NM",35],["NY",36],
+      ["NC",37],["ND",38],["OH",39],["OK",40],["OR",41],["PA",42],["RI",44],["SC",45],
+      ["SD",46],["TN",47],["TX",48],["UT",49],["VT",50],["VA",51],["WA",53],["WV",54],
+      ["WI",55],["WY",56]
+    ];
+    const fipsMap = new Map(FIPS);
+
+    const {url, text} = await fetchFirst(PATHS.raw);
+    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';')?';':',';
+    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
+    const head = rows.shift().map(h=>h.trim().toLowerCase());
+    const idx = n => head.indexOf(n);
+    const iCountry = idx('country');
+    const iState = Math.max(idx('state'), idx('state/province'));
+    if (iCountry<0 || iState<0) throw new Error('Missing country/state in scrubbed.csv');
+
+    const byState = new Map();
+    for (const r of rows){
+      if ((r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
+      const abbr = (r[iState]||'').trim().toUpperCase();
+      if (!fipsMap.has(abbr)) continue;
+      byState.set(abbr, (byState.get(abbr)||0) + 1);
+    }
+    const counts = []; for (const [abbr,n] of byState) counts.push({id:fipsMap.get(abbr), abbr, count:n});
+    setBadge('b-chor', `aggregated ${counts.length} states from ${url}`);
+
+    const spec = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:1180, height:420, data: topo,
+      transform:[{lookup:'id', from:{data:{values:counts}, key:'id', fields:['count','abbr']}}],
+      mark:{type:'geoshape', stroke:'#98a0ab', strokeWidth:0.7},
+      encoding:{
+        color:{field:'count', type:'quantitative', title:'Sightings', scale:{scheme:'blues'}},
+        tooltip:[{field:'abbr', title:'State'}, {field:'count', type:'quantitative', title:'Sightings'}]
+      },
+      projection:{type:'albersUsa'},
+      config:{background:null}
+    };
+    await vegaEmbed('#chor', spec, {actions:false});
+  }catch(e){ console.error('Choropleth error:', e); setBadge('b-chor','failed to load', false); }
+}
+
+/* ---------- B) CITY BUBBLE MAP (from ufo_cities_latlon.csv) ---------- */
+async function renderMapFromCities(){
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
                    format:{ type:'topojson', feature:'states' } };
 
-    const {url,text} = await fetchFirst(PATHS.raw || ["data/scrubbed.csv","scrubbed.csv","https://gfor009.github.io/FIT3179/scrubbed.csv"]);
-    const first = (text.split(/\r?\n/)[0]||'');
-    const delim = first.includes(';') ? ';' : ',';
+    const {url, text} = await fetchFirst(PATHS.citiesLatLon);
+    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';') ? ';' : ',';
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
+    const pick = (...names)=> names.map(n=>head.indexOf(n)).find(i=>i>=0);
+    const iCity = pick('city'); const iState = pick('state','region');
+    const iCountry = pick('country'); const iLat = pick('latitude','lat');
+    const iLon = pick('longitude','lon','lng','long'); const iCnt = pick('count','sightings','total','value');
+    if ([iCity,iState,iCountry,iLat,iLon,iCnt].some(i=>i===undefined)) throw new Error('Missing columns');
 
-    const idx = n => head.indexOf(n);
-    const iCountry = idx('country');
-    const iLat = Math.max(idx('latitude'), idx('lat'));
-    const iLon = Math.max(idx('longitude'), idx('lon'), idx('lng'));
-
-    const values = [];
+    const byKey = new Map();
     for (const r of rows){
-      if ((r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
-      const lat = smartDeg(r[iLat]), lon = smartDeg(r[iLon]);
-      if (!isFinite(lat)||!isFinite(lon)) continue;
+      const country = (r[iCountry]||'').trim().toLowerCase(); if (country !== 'us') continue;
+      const city = (r[iCity]||'').trim(); const state = (r[iState]||'').trim();
+      const lat = smartDeg((r[iLat]||'').replace(',', '.')); const lon = smartDeg((r[iLon]||'').replace(',', '.'));
+      const count = smartInt(r[iCnt]);
+      if (!isFinite(lat)||!isFinite(lon)||!isFinite(count)) continue;
       if (lat < 18 || lat > 72 || lon > -60 || lon < -170) continue;
-      values.push({lat, lon});
+      const key = city.toLowerCase()+'|'+state.toLowerCase();
+      const cur = byKey.get(key) || {city, state, latSum:0, lonSum:0, n:0, count:0};
+      cur.latSum += lat; cur.lonSum += lon; cur.n += 1; cur.count += count; byKey.set(key, cur);
     }
-    setBadge("b-mapbin", `loaded ${values.length} points from ${url}`);
+    let values = [...byKey.values()].map(d=>({city:d.city,state:d.state,lat:d.latSum/d.n,lon:d.lonSum/d.n,count:d.count}));
+    // Sort & keep top 300 for readability
+    values.sort((a,b)=>b.count-a.count); values = values.slice(0,300);
 
-    // --- parameters you can tweak ---
-    const STEP = 1;         // grid size in degrees (try 0.5 for finer)
-    const HALF = STEP/2;
+    setBadge("b-citiesmap", `loaded top ${values.length} cities from ${url}`);
+
+    const counts = values.map(d=>d.count).filter(n=>n>0).sort((a,b)=>a-b);
+    const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1; const domainMax = Math.max(1,q99);
 
     const spec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: 1180, height: 420,
-      projection: { type: "albersUsa" },
-      layer: [
-        { data: topo, mark: { type: "geoshape", fill: "#091120", stroke: "#98a0ab" } },
-        {
-          data: { values },
-          transform: [
-            // compute bin centres in lon/lat, then aggregate counts per cell
-            { calculate: `floor((datum.lon + 180)/${STEP})*${STEP} - 180 + ${HALF}`, as: "lon_bin" },
-            { calculate: `floor((datum.lat +  90)/${STEP})*${STEP} -  90 + ${HALF}`, as: "lat_bin" },
-            { aggregate: [{ op: "count", as: "n" }], groupby: ["lon_bin","lat_bin"] }
-          ],
-          mark: { type: "circle", opacity: 0.9, stroke: "#0b1220", strokeWidth: 0.3 },
-          encoding: {
-            longitude: { field: "lon_bin", type: "quantitative" },
-            latitude:  { field: "lat_bin", type: "quantitative" },
-            size:      { field: "n", type: "quantitative", title: "Sightings",
-                         scale: { type: "sqrt", range: [0, 900] } },
-            color:     { field: "n", type: "quantitative", title: "Sightings",
-                         scale: { scheme: "blues" } },
-            tooltip: [
-              { field: "n", title: "Sightings" },
-              { field: "lat_bin", title: "Lat (bin ctr)" },
-              { field: "lon_bin", title: "Lon (bin ctr)" }
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:1180, height:420, projection:{ type:'albersUsa' },
+      layer:[
+        { data: topo, mark:{ type:'geoshape', fill:'#091120', stroke:'#98a0ab' } },
+        { data:{ values },
+          transform:[ {calculate:`min(datum.count, ${domainMax})`, as:'count_capped'} ],
+          mark:{ type:'circle', opacity:0.85, stroke:'#0b1220', strokeWidth:0.5, tooltip:true },
+          encoding:{
+            longitude:{ field:'lon', type:'quantitative' },
+            latitude: { field:'lat', type:'quantitative' },
+            size:{ field:'count_capped', type:'quantitative',
+                   scale:{ type:'sqrt', domain:[0, domainMax], clamp:true, range:[10,800] },
+                   title:'Sightings (capped)' },
+            color:{ value:BLUE },
+            tooltip:[
+              {field:'city', title:'City'}, {field:'state', title:'State'},
+              {field:'count', type:'quantitative', title:'Reports'}
             ]
           }
         }
       ],
-      config: { background: null }
+      config:{ background:null }
     };
-
-    await vegaEmbed('#mapbin', spec, { actions:false });
-  } catch (e){
-    console.error('Map (binned) error:', e);
-    setBadge('b-mapbin','failed to load', false);
-  }
+    await vegaEmbed('#citiesmap', spec, {actions:false});
+  }catch(e){ console.error('Cities map error:', e); setBadge('b-citiesmap','failed to load', false); }
 }
-/* ---------- 2) MONTHLY ---------- */
+
+/* ---------- OTHER CHARTS (unchanged) ---------- */
 async function renderMonthly(){
   try{
     const {url,text} = await fetchFirst(PATHS.monthly);
@@ -193,42 +251,19 @@ async function renderMonthly(){
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const find = (names)=>{ for(const n of names){ const i=head.indexOf(n); if(i>=0) return i; } return -1; };
     const iM = find(['month','date']), iC = find(['count','total','value','sightings']);
-
-    const values = rows.map(c=>{
-      const k = ymKey(c[iM]); const cnt = smartInt(c[iC]);
-      return k && isFinite(cnt) ? { date:new Date(k+'-01'), count:cnt } : null;
-    }).filter(Boolean);
-
+    const values = rows.map(c=>{ const k=ymKey(c[iM]); const cnt=smartInt(c[iC]); return k&&isFinite(cnt)?{date:new Date(k+'-01'),count:cnt}:null; }).filter(Boolean);
     setBadge("b-monthly", `loaded ${values.length} rows from ${url}`);
-    if (!values.length){ document.getElementById('monthly').innerHTML =
-      '<p style="opacity:.75">No valid rows parsed from <code>ufo_monthly.csv</code>.</p>'; return; }
-
-    const spec = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:560, height:340,
-      data:{ values },
+    if (!values.length){ document.getElementById('monthly').innerHTML = '<p style="opacity:.75">No valid rows parsed from <code>ufo_monthly.csv</code>.</p>'; return; }
+    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
       layer:[
-        { mark:{ type:'area', opacity:0.15, color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal',title:'Month'},
-                     y:{field:'count',type:'quantitative',title:'Sightings'} } },
-        { mark:{ type:'line', color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal'},
-                     y:{field:'count',type:'quantitative'} } },
-        { mark:{ type:'point', color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal'},
-                     y:{field:'count',type:'quantitative'},
-                     tooltip:[{field:'date',type:'temporal'},{field:'count',type:'quantitative'}] } }
+        {mark:{type:'area',opacity:0.15,color:BLUE}, encoding:{x:{field:'date',type:'temporal',title:'Month'}, y:{field:'count',type:'quantitative',title:'Sightings'}}},
+        {mark:{type:'line',color:BLUE}, encoding:{x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'}}},
+        {mark:{type:'point',color:BLUE}, encoding:{x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'}, tooltip:[{field:'date',type:'temporal'},{field:'count',type:'quantitative'}]}}
       ],
-      config:{ background:null }
-    };
+      config:{background:null}};
     await vegaEmbed('#monthly', spec, {actions:false});
-  }catch(e){
-    console.error('Monthly error:', e);
-    setBadge('b-monthly','failed to load', false);
-  }
+  }catch(e){ console.error('Monthly error:', e); setBadge('b-monthly','failed to load', false); }
 }
-
-/* ---------- 3) HOURLY ---------- */
 async function renderHourly(){
   try{
     const {url,text} = await fetchFirst(PATHS.hourly);
@@ -236,33 +271,18 @@ async function renderHourly(){
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iH=head.indexOf("hour"), iC = Math.max(head.indexOf("count"), head.indexOf("total"));
-    const values = rows.map(c=>({hour:+c[iH], count:smartInt(c[iC])}))
-                       .filter(d=>isFinite(d.hour)&&isFinite(d.count));
-
+    const values = rows.map(c=>({hour:+c[iH], count:smartInt(c[iC])})).filter(d=>isFinite(d.hour)&&isFinite(d.count));
     setBadge("b-hourly", `loaded ${values.length} rows from ${url}`);
-
-    const spec = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:560, height:340,
-      data:{ values },
+    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
       transform:[{calculate:'format(datum.hour,"02")', as:'hlabel'}],
-      mark:{ type:'arc', innerRadius:90, stroke:'#0b1220' },
-      encoding:{
-        theta:{ field:'count', type:'quantitative', stack:true, title:'Reports' },
-        color:{ field:'hlabel', type:'nominal',
-                legend:{title:'Hour (00–23)', orient:'bottom', columns:6, labelLimit:160} },
-        tooltip:[{field:'hour',title:'Hour'},{field:'count',type:'quantitative'}]
-      },
-      config:{ legend:{orient:'bottom'} }
-    };
+      mark:{type:'arc',innerRadius:90,stroke:'#0b1220'},
+      encoding:{theta:{field:'count',type:'quantitative',stack:true,title:'Reports'},
+                color:{field:'hlabel',type:'nominal',legend:{title:'Hour (00–23)',orient:'bottom',columns:6,labelLimit:160}},
+                tooltip:[{field:'hour',title:'Hour'},{field:'count',type:'quantitative'}]},
+      config:{legend:{orient:'bottom'}}};
     await vegaEmbed('#hourly', spec, {actions:false});
-  }catch(e){
-    console.error('Hourly error:', e);
-    setBadge('b-hourly','failed to load', false);
-  }
+  }catch(e){ console.error('Hourly error:', e); setBadge('b-hourly','failed to load', false); }
 }
-
-/* ---------- 4) TOP 10 CITIES ---------- */
 async function renderCities(){
   try{
     const {url,text} = await fetchFirst(PATHS.cities);
@@ -270,34 +290,16 @@ async function renderCities(){
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iCity=head.indexOf("city"), iC=Math.max(head.indexOf("count"), head.indexOf("total"));
-
-    const values = rows
-      .map(c=>({ city:(c[iCity]||'').toLowerCase().trim(), count:smartInt(c[iC]) }))
-      .filter(r=>r.city && isFinite(r.count))
-      .sort((a,b)=>b.count-a.count)
-      .slice(0, 10);
-
+    const values = rows.map(c=>({ city:(c[iCity]||'').toLowerCase().trim(), count:smartInt(c[iC]) }))
+                       .filter(r=>r.city && isFinite(r.count)).sort((a,b)=>b.count-a.count).slice(0,10);
     setBadge("b-cities", `loaded ${values.length} rows from ${url}`);
-
-    const spec = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:560, height:340,
-      data:{ values },
-      mark:{ type:'bar', tooltip:true },
-      encoding:{
-        y:{ field:'city', type:'nominal', sort:'-x', title:'City' },
-        x:{ field:'count', type:'quantitative', title:'Reports' }
-      },
-      config:{ background:null }
-    };
+    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
+      mark:{type:'bar',tooltip:true},
+      encoding:{y:{field:'city',type:'nominal',sort:'-x',title:'City'}, x:{field:'count',type:'quantitative',title:'Reports'}},
+      config:{background:null}};
     await vegaEmbed('#cities', spec, {actions:false});
-  }catch(e){
-    console.error('Cities error:', e);
-    setBadge('b-cities','failed to load', false);
-  }
+  }catch(e){ console.error('Cities error:', e); setBadge('b-cities','failed to load', false); }
 }
-
-/* ---------- 5) SHAPES = LOLLIPOP ---------- */
 async function renderShapes(){
   try{
     const {url,text} = await fetchFirst(PATHS.shapes);
@@ -305,37 +307,21 @@ async function renderShapes(){
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iS=head.indexOf("shape"), iC=Math.max(head.indexOf("count"), head.indexOf("total"));
-
-    const values = rows
-      .map(c=>({ shape:(c[iS]||'').toLowerCase().trim(), count:smartInt(c[iC]) }))
-      .filter(r=>r.shape && isFinite(r.count));
-
+    const values = rows.map(c=>({ shape:(c[iS]||'').toLowerCase().trim(), count:smartInt(c[iC]) })).filter(r=>r.shape && isFinite(r.count));
     setBadge("b-shapes", `loaded ${values.length} rows from ${url}`);
-
-    const spec = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:560, height:340,
-      data:{ values },
+    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
       layer:[
-        { mark:{ type:'rule', stroke:'#64748b', strokeWidth:2 },
-          encoding:{ y:{ field:'shape', type:'nominal', sort:'-x', title:'Shape' },
-                     x:{ field:'count', type:'quantitative', title:'Reports' },
-                     x2:{ value:0 } } },
-        { mark:{ type:'point', filled:true, size:80, color:BLUE },
-          encoding:{ y:{ field:'shape', type:'nominal', sort:'-x' },
-                     x:{ field:'count', type:'quantitative' },
+        { mark:{type:'rule', stroke:'#64748b', strokeWidth:2},
+          encoding:{ y:{field:'shape',type:'nominal',sort:'-x',title:'Shape'}, x:{field:'count',type:'quantitative',title:'Reports'}, x2:{value:0} } },
+        { mark:{type:'point', filled:true, size:80, color:BLUE},
+          encoding:{ y:{field:'shape', type:'nominal', sort:'-x'},
+                     x:{field:'count', type:'quantitative'},
                      tooltip:[{field:'shape'},{field:'count',type:'quantitative',title:'Reports'}] } }
       ],
-      config:{ background:null }
-    };
+      config:{background:null}};
     await vegaEmbed('#shapes', spec, {actions:false});
-  }catch(e){
-    console.error('Shapes error:', e);
-    setBadge('b-shapes','failed to load', false);
-  }
+  }catch(e){ console.error('Shapes error:', e); setBadge('b-shapes','failed to load', false); }
 }
-
-/* ---------- 6) YEARLY ---------- */
 async function renderYearly(){
   try{
     const {url,text} = await fetchFirst(PATHS.yearly);
@@ -343,39 +329,26 @@ async function renderYearly(){
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iY=head.indexOf("year"), iC=Math.max(head.indexOf("count"), head.indexOf("total"));
-    const values = rows.map(c=>({year:+c[iY], count:smartInt(c[iC])}))
-                       .filter(d=>Number.isFinite(d.year)&&Number.isFinite(d.count));
-
+    const values = rows.map(c=>({year:+c[iY], count:smartInt(c[iC])})).filter(d=>Number.isFinite(d.year)&&Number.isFinite(d.count));
     setBadge("b-year", `loaded ${values.length} rows from ${url}`);
-
-    const spec = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:560, height:340,
-      data:{ values },
-      mark:{ type:'line', point:true, color:BLUE },
-      encoding:{
-        x:{ field:'year', type:'quantitative', title:'Year' },
-        y:{ field:'count', type:'quantitative', title:'Sightings' }
-      },
-      config:{ background:null }
-    };
+    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
+      mark:{type:'line', point:true, color:BLUE},
+      encoding:{ x:{field:'year',type:'quantitative',title:'Year'}, y:{field:'count',type:'quantitative',title:'Sightings'} },
+      config:{background:null}};
     await vegaEmbed('#yearly', spec, {actions:false});
-  }catch(e){
-    console.error('Yearly error:', e);
-    setBadge('b-year','failed to load', false);
-  }
+  }catch(e){ console.error('Yearly error:', e); setBadge('b-year','failed to load', false); }
 }
 
-/* ---------- run all ---------- */
+/* ---------- RUN ALL ---------- */
 Promise.all([
-  renderMapBinned(),   // ← add this
+  renderStateChoropleth(),
+  renderMapFromCities(),
   renderMonthly(),
   renderHourly(),
   renderCities(),
   renderShapes(),
   renderYearly()
 ]);
-
 </script>
 </body>
 </html>
