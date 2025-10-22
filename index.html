@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>UFO Sightings in America — Where, When, and What We See</title>
 
-<!-- Vega -->
+<!-- Vega / Vega-Lite -->
 <script src="https://unpkg.com/vega@5"></script>
 <script src="https://unpkg.com/vega-lite@5"></script>
 <script src="https://unpkg.com/vega-embed@6"></script>
@@ -15,52 +15,52 @@
 
 <style>
   :root{
-    --bg:#0b1120;
-    --panel:#0f172a;
-    --grid:#1f2937;
-    --ink:#e5e7eb;
-    --muted:#94a3b8;
-    --accent:#38bdf8;
+    --bg:#0b1120;      /* page */
+    --panel:#0f172a;   /* card */
+    --grid:#1f2937;    /* dividers / chart grids */
+    --ink:#e5e7eb;     /* main text */
+    --muted:#94a3b8;   /* secondary text */
+    --accent:#38bdf8;  /* highlight */
     --accent-soft:#9dd6ff;
 
     --gap-1:12px; --gap-2:16px; --gap-3:24px; --gap-4:32px; --gap-5:48px;
     --radius:16px;
-    --container:1240px;
+    --container:1200px; /* desktop friendly width */
   }
 
-  html, body { height: 100% }
+  html, body { height:100% }
   body{
     margin:0; background:var(--bg); color:var(--ink);
-    font:14.5px/1.6 Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font: 15px/1.6 Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
     -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
   }
+
   .container{ max-width:var(--container); margin:auto; padding:var(--gap-4) var(--gap-3) }
 
   header.hero{ margin:0 0 var(--gap-4) }
   header.hero h1{ margin:0 0 6px; font:700 28px/1.15 Oxanium, sans-serif; letter-spacing:.2px; }
   header.hero p{ margin:0; color:var(--muted); max-width:78ch }
 
-  /* KPI STRIP (3-up) */
+  /* KPI strip – 3 items (Total, Peak year, Top city) */
   .kpis{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:18px 0 8px }
   .kpi{
     background:var(--panel); border:1px solid var(--grid); border-radius:14px;
     padding:14px 16px; display:flex; flex-direction:column; gap:4px;
   }
   .kpi-number{ font-size:28px; line-height:1; font-weight:800; letter-spacing:.3px }
-  .kpi-label{ font-size:12px; color:var(--muted) }
-  @media (max-width:900px){ .kpis{ grid-template-columns:1fr } }
+  .kpi-label{ font-size:12px; opacity:.85 }
 
-  /* MAIN GRID: two columns + wide rows where needed */
-  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--gap-3) }
+  /* Grid */
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap:var(--gap-3) }
   .wide{ grid-column:1 / -1 }
 
-  /* Card styling = consistent figure–ground */
+  /* Cards */
   .card{
-    background:var(--panel); border:1px solid var(--grid); border-radius:var(--radius);
-    padding:var(--gap-3);
+    background:var(--panel); border:1px solid var(--grid); border-radius:var(--radius); padding:var(--gap-3);
   }
   .card h2{ margin:0 0 var(--gap-2); font:600 20px/1.25 Oxanium, sans-serif }
-  .viz{ min-height:360px }
+
+  .viz{ min-height:340px }
   .caption{ margin:.5rem 0 0; color:var(--muted) }
 
   footer.meta{
@@ -68,13 +68,15 @@
     border-top:1px solid var(--grid); padding-top:var(--gap-3); font-size:13px;
   }
 
-  /* Make Vega more readable on dark */
+  /* Vega-Lite on dark background */
   .vega-embed .vega-legend text,
   .vega-embed .leg-title { fill:var(--ink) !important }
   .vega-embed .role-axis-label, .vega-embed .role-axis-title { fill:var(--ink) !important }
   .vega-embed .role-axis-grid, .vega-embed .mark-rule { stroke:var(--grid) !important }
 
-  @media (max-width:980px){ .grid{ grid-template-columns:1fr } }
+  @media (max-width: 1040px){
+    .grid{ grid-template-columns:1fr }
+  }
 </style>
 </head>
 
@@ -84,14 +86,14 @@
     <h1>UFO Sightings in America — Where, When, and What We See</h1>
     <p id="intro">
       This visualisation turns thousands of NUFORC reports into a guided tour of the American UFO imagination.
-      We start wide—state and city maps show where reports cluster—then move through time to watch waves of sightings rise
-      and fade. Finally, we zoom into the shapes people claim to see and when in the day they look up.
-      The goal isn’t to prove or debunk anything; it’s to reveal patterns you can verify from the data—mixing geography,
+      We start wide—state and city maps show where reports cluster—then move through time to watch waves of
+      sightings rise and fade. Finally, we zoom into the shapes people describe and the hours they look up.
+      The goal isn’t to prove or debunk; it’s to reveal patterns you can verify from the data—mixing geography,
       culture, and time into one story.
     </p>
   </header>
 
-  <!-- KPI STRIP (removed "States covered") -->
+  <!-- KPI STRIP (3 items) -->
   <div class="kpis">
     <div class="kpi"><div class="kpi-number" id="kpi-total">—</div><div class="kpi-label">Total U.S. reports</div></div>
     <div class="kpi"><div class="kpi-number" id="kpi-peak">—</div><div class="kpi-label">Peak year (reports)</div></div>
@@ -99,6 +101,7 @@
   </div>
 
   <section class="grid">
+
     <!-- WHERE: State choropleth -->
     <article class="card wide">
       <h2>Where are reports concentrated? (by state)</h2>
@@ -106,64 +109,58 @@
       <p id="chor-desc" class="caption"></p>
     </article>
 
-    <!-- WHERE (detail): City bubble map -->
+    <!-- WHERE (detail): City hotspots (white basemap) -->
     <article class="card wide">
       <h2>City hotspots (top 300 bubbles)</h2>
       <div id="citiesmap" class="viz" aria-label="Bubble map of top-reporting cities"></div>
       <p id="citiesmap-desc" class="caption"></p>
     </article>
 
-    <!-- WHEN: Monthly (left) + Yearly (right) in the same row -->
-    <article class="card">
-      <h2>Monthly UFO reports</h2>
-      <div id="monthly" class="viz" aria-label="Monthly time series with 12-month average"></div>
-      <p id="monthly-desc" class="caption"></p>
-    </article>
-
-    <article class="card">
-      <h2>Yearly trend (interactive focus + context)</h2>
-      <div id="yearly" class="viz" aria-label="Yearly series with 5-year average and brush"></div>
-      <p id="yearly-desc" class="caption"></p>
-    </article>
-
-    <!-- WHEN: Hour-of-day + WHAT: Top 10 cities -->
+    <!-- WHEN: Hour-of-day radial -->
     <article class="card">
       <h2>When in the day? (radial)</h2>
       <div id="hourly" class="viz" aria-label="Radial bar chart of reports by hour"></div>
-      <p id="hourly-desc" class="caption"></p>
+      <p class="caption">Reports cluster after sunset (18:00–23:00) and thin out toward dawn—consistent with skywatching habits and visibility.</p>
     </article>
 
+    <!-- WHAT: Top 10 cities (ranking) -->
     <article class="card">
       <h2>Top 10 cities for UFO reports (No.1 highlighted)</h2>
       <div id="cities" class="viz" aria-label="Bar ranking of top 10 cities"></div>
       <p id="cities-desc" class="caption"></p>
     </article>
 
-    <!-- WHAT: Shapes — donut (Top 5 only, not a bar) -->
+    <!-- WHAT: Shapes (all shapes as a single 100% stacked bar) -->
     <article class="card">
       <h2>What do people report?</h2>
-      <div id="shapes" class="viz" aria-label="Donut of top 5 reported shapes"></div>
-      <p id="shapes-desc" class="caption"></p>
+      <div id="shapes" class="viz" aria-label="Stacked 100% bar for all reported shapes"></div>
+      <p id="shapes-desc" class="caption">All reported shapes shown as a single stacked bar (100% scale). Hover to see counts and share.</p>
     </article>
+
+    <!-- WHEN: Yearly focus + context (interactive) -->
+    <article class="card">
+      <h2>Yearly trend (interactive focus + context)</h2>
+      <div id="yearly" class="viz" aria-label="Yearly series with 5-year average and brush"></div>
+      <p id="yearly-desc" class="caption"></p>
+    </article>
+
   </section>
 
   <footer class="meta">
-    <strong>Data:</strong> NUFORC “scrubbed.csv” + derived aggregates. <strong>Scope:</strong> U.S. only.  
-    <strong>Author:</strong> Your Name • <strong>Date:</strong> <span id="today"></span> •
-    <strong>Tools:</strong> Vega-Lite 5, GitHub Pages.  
-    <strong>Notes:</strong> Outliers capped where noted; coordinates cleaned; legends/axes harmonised for consistent figure–ground.
+    <strong>Data:</strong> NUFORC “scrubbed.csv” + derived aggregates. <strong>Scope:</strong> U.S. only.
+    <strong>Author:</strong> Gina Ford • <strong>Date:</strong> <span id="today"></span> •
+    <strong>Tools:</strong> Vega-Lite 5, GitHub Pages.
+    <br><strong>Notes:</strong> Outliers capped where noted; coordinates cleaned; legends/axes harmonised for consistent figure–ground.
   </footer>
 </div>
-
 <script>document.getElementById('today').textContent = new Date().toLocaleDateString();</script>
 
 <script>
-/* ---------- PATHS & HELPERS ---------- */
+/* ---------------- PATHS & HELPERS ---------------- */
 const PATHS = {
   raw:     ["data/scrubbed.csv","scrubbed.csv","https://gfor009.github.io/FIT3179/scrubbed.csv"],
   citiesLatLon: ["data/ufo_cities_latlon.csv","ufo_cities_latlon.csv"],
   cities:  ["data/ufo_cities.csv","ufo_cities.csv"],
-  monthly: ["data/ufo_monthly.csv","ufo_monthly.csv"],
   shapes:  ["data/ufo_shape.csv","ufo_shape.csv"],
   hourly:  ["data/ufo_hourly.csv","ufo_hourly.csv"],
   yearly:  ["data/ufo_year.csv","ufo_year.csv"]
@@ -195,21 +192,10 @@ function smartDeg(s){
   const scale = Math.pow(10, Math.max(7, digits.length - 2));
   return neg * (Number(digits) / scale);
 }
-function ymKey(s){
-  const str = String(s||'').trim();
-  let m = str.match(/^\s*(\d{4})[-\/. ]?(\d{1,2})\s*$/);
-  if (m) return `${m[1]}-${m[2].padStart(2,'0')}`;
-  m = str.match(/(\d{4}).*?(\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2,'0')}`;
-  const names={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-  const m2=str.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b.*?(\d{4})/i);
-  if(m2) return `${m2[2]}-${String(names[m2[1].toLowerCase()]).padStart(2,'0')}`;
-  return null;
-}
-const BLUE = '#38bdf8';
 
-/* ---------- KPIs (Total, Peak Year, Top City) ---------- */
+/* ---------------- KPIs (Total, Peak year, Top city) ---------------- */
 async function renderKPIs(){
+  // helper csv parse
   const parseCSV = (text) => {
     const first = (text.split(/\r?\n/)[0]||'');
     const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
@@ -220,15 +206,15 @@ async function renderKPIs(){
 
   let totalUS = 0;
   let peakYear = {year:'—', count:0};
+  let topCity = {label:'—', count:0};
 
   try{
+    // From raw: total + peak year
     const {text} = await fetchFirst(PATHS.raw);
     const {head, rows} = parseCSV(text);
-
     const iCountry = head.indexOf('country');
     const iDT      = [head.indexOf('datetime'), head.indexOf('date_time'), head.indexOf('date'),
                       head.indexOf('occurred'), head.indexOf('sighted_at')].find(i=>i>=0);
-
     const byYear = new Map();
 
     for (const r of rows){
@@ -245,18 +231,14 @@ async function renderKPIs(){
     }
   }catch(e){ console.warn('KPI (raw) failed:', e); }
 
-  // Top city
-  let topCity = {label:'—', count:0};
   try{
+    // From cities: top city
     const {text} = await fetchFirst(PATHS.citiesLatLon);
-    const {head, rows} = (()=>{
-      const first = (text.split(/\r?\n/)[0]||'');
-      const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
-      const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-      const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
-      return {head, rows};
-    })();
-
+    const {head, rows} = ((t)=>{
+      const f=(t.split(/\r?\n/)[0]||''); const d=f.includes('\t')?'\t':(f.includes(';')?';':',');
+      const r=t.trim().split(/\r?\n/).filter(Boolean).map(x=>x.split(d)); const h=(r.shift()||[]).map(s=>s.trim().toLowerCase());
+      return {head:h, rows:r};
+    })(text);
     const iCity = head.indexOf('city');
     const iState = Math.max(head.indexOf('state'), head.indexOf('region'));
     const iCountry = head.indexOf('country');
@@ -265,9 +247,7 @@ async function renderKPIs(){
     const agg = new Map();
     for (const r of rows){
       if (iCountry>=0 && (r[iCountry]||'').trim().toLowerCase()!=='us') continue;
-      const city  = (r[iCity]||'').trim();
-      const state = (r[iState]||'').trim();
-      const cnt   = smartInt(r[iCnt]);
+      const city  = (r[iCity]||'').trim(); const state = (r[iState]||'').trim(); const cnt = smartInt(r[iCnt]);
       if (!city || !Number.isFinite(cnt)) continue;
       const key = `${city}__${state}`;
       agg.set(key, (agg.get(key)||0) + cnt);
@@ -280,43 +260,36 @@ async function renderKPIs(){
   }catch(e){ console.warn('KPI (cities) failed:', e); }
 
   const fmt = new Intl.NumberFormat('en-US').format;
-  const set = (id,v) => { const n=document.getElementById(id); if(n) n.textContent=v; };
-
-  set('kpi-total', fmt(totalUS));
-  set('kpi-peak', (peakYear.year!=='—') ? `${peakYear.year} (${fmt(peakYear.count)})` : '—');
-  set('kpi-topcity', topCity.count ? `${topCity.label} (${fmt(topCity.count)})` : '—');
+  document.getElementById('kpi-total').textContent = fmt(totalUS);
+  document.getElementById('kpi-peak').textContent = (peakYear.year!=='—') ? `${peakYear.year} (${fmt(peakYear.count)})` : '—';
+  document.getElementById('kpi-topcity').textContent = topCity.count ? `${topCity.label} (${fmt(topCity.count)})` : '—';
 }
 
-/* ---------- A) STATE CHOROPLETH ---------- */
+/* ---------------- A) STATE CHOROPLETH ---------------- */
 async function renderStateChoropleth(){
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
                    format:{ type:'topojson', feature:'states' } };
 
-    const {text} = await fetchFirst(PATHS.raw);
-    const first = (text.split(/\r?\n/)[0]||'');
-    const delim = first.includes(';')?';':',';
-    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-    const head = rows.shift().map(h=>h.trim().toLowerCase());
-    const idx = n => head.indexOf(n);
-    const iCountry = idx('country');
-    const iState = Math.max(idx('state'), idx('state/province'));
-    if (iCountry<0 || iState<0) throw new Error('Missing country/state in scrubbed.csv');
-
-    const FIPS = [
-      ["AL",1],["AK",2],["AZ",4],["AR",5],["CA",6],["CO",8],["CT",9],["DE",10],["DC",11],
-      ["FL",12],["GA",13],["HI",15],["ID",16],["IL",17],["IN",18],["IA",19],["KS",20],
-      ["KY",21],["LA",22],["ME",23],["MD",24],["MA",25],["MI",26],["MN",27],["MS",28],
-      ["MO",29],["MT",30],["NE",31],["NV",32],["NH",33],["NJ",34],["NM",35],["NY",36],
-      ["NC",37],["ND",38],["OH",39],["OK",40],["OR",41],["PA",42],["RI",44],["SC",45],
-      ["SD",46],["TN",47],["TX",48],["UT",49],["VT",50],["VA",51],["WA",53],["WV",54],
-      ["WI",55],["WY",56]
-    ];
+    // FIPS map
+    const FIPS = [["AL",1],["AK",2],["AZ",4],["AR",5],["CA",6],["CO",8],["CT",9],["DE",10],["DC",11],
+      ["FL",12],["GA",13],["HI",15],["ID",16],["IL",17],["IN",18],["IA",19],["KS",20],["KY",21],["LA",22],
+      ["ME",23],["MD",24],["MA",25],["MI",26],["MN",27],["MS",28],["MO",29],["MT",30],["NE",31],["NV",32],
+      ["NH",33],["NJ",34],["NM",35],["NY",36],["NC",37],["ND",38],["OH",39],["OK",40],["OR",41],["PA",42],
+      ["RI",44],["SC",45],["SD",46],["TN",47],["TX",48],["UT",49],["VT",50],["VA",51],["WA",53],["WV",54],
+      ["WI",55],["WY",56]];
     const fipsMap = new Map(FIPS);
 
+    // Build counts from raw
+    const {text} = await fetchFirst(PATHS.raw);
+    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';')?';':',';
+    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
+    const head = rows.shift().map(h=>h.trim().toLowerCase());
+    const iCountry = head.indexOf('country');
+    const iState = Math.max(head.indexOf('state'), head.indexOf('state/province'));
     const byState = new Map();
     for (const r of rows){
-      if ((r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
+      if (iCountry>=0 && (r[iCountry]||'').trim().toLowerCase()!=='us') continue;
       const abbr = (r[iState]||'').trim().toUpperCase();
       if (!fipsMap.has(abbr)) continue;
       byState.set(abbr, (byState.get(abbr)||0) + 1);
@@ -331,33 +304,20 @@ async function renderStateChoropleth(){
     const total = counts.reduce((s,d)=>s+d.count,0);
     const descEl = document.getElementById('chor-desc');
     if (descEl){
-      descEl.textContent =
-        `Each state is coloured by total UFO reports. Dataset total: ${fmt(total)} U.S. sightings. ` +
-        `Highest: ${top}. Lowest: ${bottom}. Larger, more populous states tend to report more sightings.`;
+      descEl.textContent = `Each state is coloured by total UFO reports (U.S. total ${fmt(total)}). Highest: ${top}. Lowest: ${bottom}.`;
     }
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:1180, height:420,
       data: topo,
-      transform:[{
-        lookup:'id',
-        from:{ data:{ values:counts }, key:'id', fields:['count','abbr'] }
-      }],
+      transform:[{ lookup:'id', from:{ data:{ values:counts }, key:'id', fields:['count','abbr'] } }],
       mark:{ type:'geoshape', stroke:'#98a0ab', strokeWidth:0.7 },
       encoding:{
-        color:{
-          field:'count', type:'quantitative', title:'Total sightings',
-          scale:{ scheme:'blues' },
-          legend:{
-            orient:'right', gradientLength:240, tickCount:6, format:',d',
-            titleColor:'#e5e7eb', labelColor:'#e5e7eb', titleFontSize:12, labelFontSize:11
-          }
-        },
-        tooltip:[
-          { field:'abbr', title:'State' },
-          { field:'count', type:'quantitative', title:'Sightings', format:',d' }
-        ]
+        color:{ field:'count', type:'quantitative', title:'Total sightings', scale:{ scheme:'blues' },
+                legend:{ orient:'right', gradientLength:240, tickCount:6, format:',d',
+                         titleColor:'#e5e7eb', labelColor:'#e5e7eb' } },
+        tooltip:[ {field:'abbr', title:'State'}, {field:'count', type:'quantitative', title:'Sightings', format:',d'} ]
       },
       projection:{ type:'albersUsa' },
       config:{ background:null }
@@ -366,26 +326,23 @@ async function renderStateChoropleth(){
   }catch(e){ console.error('Choropleth error:', e); }
 }
 
-/* ---------- B) CITY BUBBLE MAP ---------- */
+/* ---------------- B) CITY BUBBLE MAP (white basemap) ---------------- */
 async function renderMapFromCities(){
   try{
     const topo = { url:'https://vega.github.io/vega-datasets/data/us-10m.json',
                    format:{ type:'topojson', feature:'states' } };
 
     const {text} = await fetchFirst(PATHS.citiesLatLon);
-    const first = (text.split(/\r?\n/)[0]||'');
-    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
+    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';') ? ';' : ',';
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const pick = (...names)=> names.map(n=>head.indexOf(n)).find(i=>i>=0);
-
     const iCity = pick('city');
     const iState = pick('state','region');
     const iCountry = pick('country');
     const iLat = pick('latitude','lat');
     const iLon = pick('longitude','lon','lng','long');
     const iCnt = pick('count','sightings','total','value');
-    if ([iCity,iState,iCountry,iLat,iLon,iCnt].some(i=>i===undefined)) throw new Error('Missing columns');
 
     const byKey = new Map();
     for (const r of rows){
@@ -403,57 +360,43 @@ async function renderMapFromCities(){
       cur.latSum += lat; cur.lonSum += lon; cur.n += 1; cur.count += count;
       byKey.set(key, cur);
     }
-
-    let values = [...byKey.values()].map(d=>({
-      city:d.city, state:d.state, lat:d.latSum/d.n, lon:d.lonSum/d.n, count:d.count
-    }));
+    let values = [...byKey.values()].map(d=>({ city:d.city, state:d.state, lat:d.latSum/d.n, lon:d.lonSum/d.n, count:d.count }));
     values.sort((a,b)=>b.count-a.count);
-    values = values.slice(0, 300);
-
-    const fmt = new Intl.NumberFormat('en-US').format;
-    const top5 = values.slice(0,5).map(d => `${d.city}, ${d.state} (${fmt(d.count)})`).join(', ');
-    const totalTop = values.reduce((s,d)=>s+d.count,0);
-    const desc = document.getElementById('citiesmap-desc');
-    if (desc) {
-      desc.textContent =
-        `Each bubble marks a city; size encodes total reports. The map highlights dense corridors along the Northeast, Florida, Southern California, and parts of the Great Lakes and Texas, with sparser coverage across the Mountain West and northern Plains. This view shows the top 300 cities (${fmt(totalTop)} reports). Leaders include: ${top5}.`;
-    }
+    values = values.slice(0,300);
 
     const counts = values.map(d=>d.count).filter(n=>n>0).sort((a,b)=>a-b);
     const q99 = counts.length ? counts[Math.floor(0.99*(counts.length-1))] : 1;
     const domainMax = Math.max(1, q99);
+
+    const fmt = new Intl.NumberFormat('en-US').format;
+    const totalTop = values.reduce((s,d)=>s+d.count,0);
+    const top5 = values.slice(0,5).map(d => `${d.city}, ${d.state} (${fmt(d.count)})`).join(', ');
+    const desc = document.getElementById('citiesmap-desc');
+    if (desc){
+      desc.textContent = `Each bubble marks a city; size encodes total reports. White basemap improves contrast on a dark page. Top 300 cities shown (${fmt(totalTop)} reports). Leaders: ${top5}.`;
+    }
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
       width:1180, height:420,
       projection:{ type:'albersUsa' },
       layer:[
-        { data: topo, mark:{ type:'geoshape', fill:'#FFFFFF', stroke:'#091120' } },
+        { data: topo, mark:{ type:'geoshape', fill:'#ffffff', stroke:'#94a3b8' } }, /* WHITE MAP */
         { data:{ values },
           transform:[ {calculate:`min(datum.count, ${domainMax})`, as:'count_capped'} ],
-          mark:{ type:'circle', opacity:0.85, stroke:'#0b1220', strokeWidth:0.5, tooltip:true },
+          mark:{ type:'circle', opacity:0.85, stroke:'#0b1220', strokeWidth:0.7, tooltip:true },
           encoding:{
             longitude:{ field:'lon', type:'quantitative' },
             latitude: { field:'lat', type:'quantitative' },
-            size:{
-              field:'count', type:'quantitative',
-              scale:{ type:'linear', domain:[0, domainMax], clamp:true, range:[40, 260] },
-              title:'City sightings',
-              legend:{
-                orient:'right', values:[0,50,100,150,200,300], format:',d',
-                labelColor:'#e5e7eb', titleColor:'#e5e7eb',
-                labelFontSize:14, titleFontSize:14,
-                symbolType:'circle', symbolStrokeColor:'#0b1220', symbolStrokeWidth:0.8
-              }
-            },
-            color:{ value: BLUE },
-            tooltip:[
-              {field:'city', title:'City'},
-              {field:'state', title:'State'},
-              {field:'count', type:'quantitative', title:'Reports', format:',d'}
-            ]
-          }
-        }
+            size:{ field:'count_capped', type:'quantitative',
+                   scale:{ type:'linear', domain:[0, domainMax], clamp:true, range:[40, 260] },
+                   title:'City sightings',
+                   legend:{ orient:'right', values:[0,50,100,150,200,300], format:',d',
+                            labelColor:'#e5e7eb', titleColor:'#e5e7eb', labelFontSize:13, titleFontSize:13,
+                            symbolStrokeColor:'#0b1220', symbolStrokeWidth:0.8 } },
+            color:{ value:'#38bdf8' },
+            tooltip:[ {field:'city', title:'City'}, {field:'state', title:'State'}, {field:'count', type:'quantitative', title:'Reports', format:',d'} ]
+          } }
       ],
       config:{ background:null }
     };
@@ -461,321 +404,55 @@ async function renderMapFromCities(){
   }catch(e){ console.error('Cities map error:', e); }
 }
 
-/* ---------- C) MONTHLY ---------- */
-async function renderMonthly(){
-  try{
-    const tryMonthly = async ()=>{
-      const {text} = await fetchFirst(PATHS.monthly);
-      const first = (text.split(/\r?\n/)[0]||'');
-      const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
-      const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-      const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
-      const find = (names)=>{ for(const n of names){ const i=head.indexOf(n); if(i>=0) return i; } return -1; };
-      const iM = find(['month','date']), iC = find(['count','total','value','sightings']);
-      if (iM < 0 || iC < 0) return { values: [] };
-      const values = rows.map(r=>{
-        const k = ymKey(r[iM]); const c = smartInt(r[iC]);
-        return (k && Number.isFinite(c)) ? { date:new Date(k+'-01'), count:c } : null;
-      }).filter(Boolean).sort((a,b)=>a.date-b.date);
-      return { values };
-    };
-
-    const buildFromRaw = async ()=>{
-      const {text} = await fetchFirst(PATHS.raw);
-      const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes(';')?';':',';
-      const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-      const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
-      const idx = n => head.indexOf(n);
-      const iCountry = idx('country');
-      const iDT = [idx('datetime'), idx('date_time'), idx('date'), idx('occurred'), idx('sighted_at')]
-                    .reduce((a,b)=>a>=0?a:b, -1);
-      if (iDT < 0) return { values: [] };
-      const byYM = new Map();
-      for (const r of rows){
-        if (iCountry >= 0 && (r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
-        const k = ymKey(r[iDT]); if (!k) continue;
-        byYM.set(k, (byYM.get(k)||0) + 1);
-      }
-      const values = [...byYM.entries()]
-        .map(([k,c])=>({ date:new Date(k+'-01'), count:c }))
-        .sort((a,b)=>a.date-b.date);
-      return { values };
-    };
-
-    let { values } = await tryMonthly();
-    if (!values.length){ const built = await buildFromRaw(); values = built.values; }
-    if (!values.length){
-      document.getElementById('monthly').innerHTML = '<p style="opacity:.75">No monthly data found.</p>';
-      return;
-    }
-
-    // 12-month moving average
-    const mv = [];
-    for (let i=0, run=0; i<values.length; i++){
-      run += values[i].count;
-      if (i>=12) run -= values[i-12].count;
-      mv.push({ date: values[i].date, avg12: (i>=11) ? run/12 : null });
-    }
-
-    const fmt = new Intl.NumberFormat('en-US').format;
-    const firstDate = values[0].date, lastDate = values[values.length-1].date;
-    const total = values.reduce((s,d)=>s+d.count,0);
-    const peak = values.reduce((a,b)=> b.count>a.count?b:a, values[0]);
-    const p = document.getElementById('monthly-desc');
-    if (p){
-      const span = `${firstDate.getFullYear()}–${lastDate.getFullYear()}`;
-      p.textContent =
-        `Monthly reports show a long baseline through mid-century, rising sharply from the late 1990s into the 2000s. Span: ${span}; total ${fmt(total)} reports. Peak: ${peak.date.toLocaleString('en-US',{year:'numeric',month:'short'})} with ${fmt(peak.count)} reports. The pale line shows a 12-month average.`;
-    }
-
-    const spec = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:580, height:360,
-      data:{ values },
-      layer:[
-        { mark:{ type:'area', opacity:0.12, color:BLUE },
-          encoding:{ x:{field:'date',type:'temporal',title:'Month',
-                       axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}},
-                     y:{field:'count',type:'quantitative',title:'Sightings',
-                       axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}} } },
-        { mark:{ type:'line', color:BLUE, strokeWidth:1.2 },
-          encoding:{ x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'} } },
-        { data:{ values: mv.filter(d=>d.avg12!=null) },
-          mark:{ type:'line', color:'#9dd6ff', strokeWidth:2 },
-          encoding:{ x:{field:'date',type:'temporal'}, y:{field:'avg12',type:'quantitative', title:'12-mo avg'} } }
-      ],
-      config:{ background:null, axis:{gridColor:'#1f2937'} }
-    };
-    await vegaEmbed('#monthly', spec, {actions:false});
-  }catch(e){ console.error('Monthly error:', e); }
-}
-
-/* ---------- D) YEARLY (focus+context) ---------- */
-async function renderYearly(){
-  // helper to read a CSV text into rows + header with auto delimiter
-  const parseCSV = (text) => {
-    const first = (text.split(/\r?\n/)[0]||'');
-    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
-    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-    const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
-    return { head, rows };
-  };
-
-  // 1) Try the tidy yearly CSV
-  async function loadYearCSV(){
-    try{
-      const {text} = await fetchFirst(PATHS.yearly);
-      const {head, rows} = parseCSV(text);
-      const iY = head.indexOf('year');
-      const iC = Math.max(head.indexOf('count'), head.indexOf('total'), head.indexOf('value'), head.indexOf('sightings'));
-      if (iY<0 || iC<0) return [];
-      return rows.map(r=>({year:+r[iY], count:smartInt(r[iC])}))
-                 .filter(d=>Number.isFinite(d.year)&&Number.isFinite(d.count))
-                 .sort((a,b)=>a.year-b.year);
-    }catch{ return []; }
-  }
-
-  // 2) Fallback: build per-year counts from scrubbed.csv (US only)
-  async function buildFromRaw(){
-    try{
-      const {text} = await fetchFirst(PATHS.raw);
-      const {head, rows} = parseCSV(text);
-      const iCountry = head.indexOf('country');
-      const iDT = [head.indexOf('datetime'), head.indexOf('date_time'), head.indexOf('date'),
-                   head.indexOf('occurred'), head.indexOf('sighted_at')].find(i=>i>=0);
-      if (iDT<0) return [];
-      const byYear = new Map();
-      for (const r of rows){
-        if (iCountry>=0 && (r[iCountry]||'').trim().toLowerCase()!=='us') continue;
-        const m = String(r[iDT]||'').match(/(\d{4})/);
-        if (!m) continue;
-        const y = +m[1];
-        if (!Number.isFinite(y)) continue;
-        byYear.set(y, (byYear.get(y)||0)+1);
-      }
-      return [...byYear.entries()].map(([year,count])=>({year,count})).sort((a,b)=>a.year-b.year);
-    }catch{ return []; }
-  }
-
-  // 3) Get data (with fallback)
-  let values = await loadYearCSV();
-  if (!values.length) values = await buildFromRaw();
-
-  const mount = document.getElementById('yearly');
-  if (!values.length){
-    mount.innerHTML = '<p style="opacity:.75">No yearly data available.</p>';
-    return;
-  }
-
-  // Stats + caption
-  const fmt = new Intl.NumberFormat('en-US').format;
-  const span = `${values[0].year}–${values[values.length-1].year}`;
-  const total = values.reduce((s,d)=>s+d.count,0);
-  const peak = values.reduce((a,b)=> (b.count>a.count?b:a), values[0]);
-  const ma5 = [];
-  for (let i=0, run=0; i<values.length; i++){
-    run += values[i].count;
-    if (i>=5) run -= values[i-5].count;
-    ma5.push({year: values[i].year, avg5: (i>=4) ? run/5 : null});
-  }
-  const p = document.getElementById('yearly-desc');
-  if (p){
-    p.textContent = `Annual reports rise steeply from the late 1990s into the 2000s. Span: ${span}; total ${fmt(total)} sightings. Peak year: ${peak.year} (${fmt(peak.count)} reports). Brush to zoom; the dashed line shows the 5-year average.`;
-  }
-
-  // 4) Responsive focus + context (container width)
-  const spec = {
-    $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-    autosize:{ type:'fit', contains:'padding' },
-    vconcat: [
-      {
-        width:'container', height:320,
-        data:{ values },
-        params: [
-          { name: "hover", select: {type:"point", fields:["year"], nearest:true, on:"mouseover", clear:"mouseout"} },
-          { name: "brush", select: {type:"interval", encodings:["x"]} }
-        ],
-        layer: [
-          { mark:{type:'area', opacity:0.10, color:'#38bdf8'},
-            encoding:{
-              x:{field:'year', type:'quantitative', title:'Year',
-                 axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}, scale:{domain:{param:"brush"}}},
-              y:{field:'count', type:'quantitative', title:'Sightings',
-                 axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}}
-            }
-          },
-          { mark:{type:'line', color:'#38bdf8', strokeWidth:1.5},
-            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'count', type:'quantitative'} }
-          },
-          { data:{values: ma5.filter(d=>d.avg5!=null)},
-            mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
-            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'avg5', type:'quantitative', title:'5-yr average'} }
-          },
-          { mark:{type:'point', filled:true, size:40, color:'#38bdf8'},
-            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'count', type:'quantitative'},
-                       opacity:{ condition:{param:'hover', empty:false, value:1}, value:0 } }
-          },
-          { mark:{type:'point', opacity:0},
-            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'count', type:'quantitative'},
-                       tooltip:[ {field:'year', title:'Year'},
-                                 {field:'count', type:'quantitative', title:'Reports', format:',d'} ] }
-          }
-        ],
-        config:{ background:null, axis:{gridColor:'#1f2937'} }
-      },
-      {
-        width:'container', height:90,
-        data:{ values },
-        mark:{ type:'area', opacity:0.15, color:'#38bdf8' },
-        params:[ { name:"brush", select:{type:"interval", encodings:["x"]} } ],
-        encoding:{
-          x:{ field:'year', type:'quantitative', title:null,
-              axis:{labels:false,ticks:false,domain:false} },
-          y:{ field:'count', type:'quantitative', title:null,
-              axis:{labels:false,ticks:false,domain:false} }
-        },
-        config:{ background:null, view:{stroke:null} }
-      }
-    ],
-    config:{ background:null }
-  };
-
-  try{
-    await vegaEmbed(mount, spec, {actions:false, renderer:'canvas'});
-  }catch(err){
-    console.warn('Focus+context failed, falling back to simple line:', err);
-    const simple = {
-      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      autosize:{ type:'fit', contains:'padding' },
-      width:'container', height:360,
-      data:{ values },
-      layer:[
-        { mark:{ type:'area', opacity:0.10, color:'#38bdf8'},
-          encoding:{ x:{field:'year', type:'quantitative', title:'Year',
-                         axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}},
-                     y:{field:'count', type:'quantitative', title:'Sightings',
-                         axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}} } },
-        { mark:{type:'line', color:'#38bdf8', strokeWidth:1.5},
-          encoding:{ x:{field:'year', type:'quantitative'}, y:{field:'count', type:'quantitative'} } },
-        { data:{values: ma5.filter(d=>d.avg5!=null)},
-          mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
-          encoding:{ x:{field:'year', type:'quantitative'}, y:{field:'avg5', type:'quantitative'} } }
-      ],
-      config:{ background:null, axis:{gridColor:'#1f2937'} }
-    };
-    await vegaEmbed(mount, simple, {actions:false, renderer:'canvas'});
-  }
-}
-
-/* ---------- E) HOURLY ---------- */
+/* ---------------- D) HOURLY (radial) ---------------- */
 async function renderHourly(){
   try{
     const {text} = await fetchFirst(PATHS.hourly);
-    const first = (text.split(/\r?\n/)[0]||'');
-    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
+    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iH = head.indexOf("hour");
     const iC = Math.max(head.indexOf("count"), head.indexOf("total"), head.indexOf("value"), head.indexOf("reports"));
 
-    let values = rows.map(c=>({hour:+c[iH], count:smartInt(c[iC])}))
-                     .filter(d=>Number.isFinite(d.hour)&&Number.isFinite(d.count));
-    const have = new Set(values.map(d=>d.hour));
-    for (let h=0; h<24; h++) if(!have.has(h)) values.push({hour:h, count:0});
-    values = values.sort((a,b)=>a.hour-b.hour);
+    let values = rows.map(c=>({hour:+c[iH], count:smartInt(c[iC])})).filter(d=>Number.isFinite(d.hour)&&Number.isFinite(d.count));
+    const have = new Set(values.map(d=>d.hour)); for(let h=0;h<24;h++) if(!have.has(h)) values.push({hour:h,count:0});
+    values.sort((a,b)=>a.hour-b.hour);
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:580, height:360,
+      width:560, height:420,
       data:{ values },
       transform:[{ calculate:'format(datum.hour,"02")', as:'hlabel' }],
       layer:[
-        {
-          mark:{ type:'arc', innerRadius:80, cornerRadius:3, stroke:'#0b1220', strokeWidth:0.6 },
+        { mark:{ type:'arc', innerRadius:80, cornerRadius:3, stroke:'#0b1220', strokeWidth:0.6 },
           encoding:{
             theta:{ field:'hlabel', type:'nominal', sort:null, title:null },
-            radius:{ field:'count', type:'quantitative', title:'Reports',
-                     scale:{ rangeMin:80, rangeMax:190 } },
-            color:{ field:'count', type:'quantitative', title:'Reports',
-                    scale:{ scheme:'cividis' },
-                    legend:{ orient:'right', tickCount:5, format:',d',
-                             titleColor:'#e5e7eb', labelColor:'#e5e7eb', gradientLength:160 } },
-            tooltip:[ { field:'hour', title:'Hour (00–23)' },
-                      { field:'count', type:'quantitative', title:'Reports', format:',d'} ]
-          }
-        },
+            radius:{ field:'count', type:'quantitative', title:'Reports', scale:{ rangeMin:80, rangeMax:190 } },
+            color:{ field:'count', type:'quantitative', title:'Reports', scale:{ scheme:'cividis' },
+                    legend:{ orient:'right', tickCount:5, format:',d', titleColor:'#e5e7eb', labelColor:'#e5e7eb', gradientLength:160 } },
+            tooltip:[ {field:'hour', title:'Hour (00–23)'}, {field:'count', type:'quantitative', title:'Reports', format:',d'} ]
+          } },
         { mark:{ type:'text', radius:205, fontSize:10, fill:'#e5e7eb' },
           encoding:{ theta:{ field:'hlabel', type:'nominal', sort:null }, text:{ field:'hlabel' } } }
       ],
-      view:{ stroke:null },
-      config:{ background:null, axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb' } }
+      view:{ stroke:null }, config:{ background:null }
     };
     await vegaEmbed('#hourly', spec, {actions:false});
-
-    const hd = document.getElementById('hourly-desc');
-    if (hd) hd.textContent = 'Reports cluster after sunset (19:00–23:00), dip after midnight, and are sparse in the morning—consistent with skywatching habits and visibility.';
   }catch(e){ console.error('Hourly error:', e); }
 }
 
-/* ---------- F) TOP 10 CITIES (ranking) ---------- */
+/* ---------------- E) TOP 10 CITIES ---------------- */
 async function renderCities(){
   try{
     const {text} = await fetchFirst(PATHS.cities);
-    const first = (text.split(/\r?\n/)[0]||'');
-    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
+    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iCity=head.indexOf("city"), iC=Math.max(head.indexOf("count"), head.indexOf("total"));
 
-    let values = rows
-      .map(c=>({ city:(c[iCity]||'').toLowerCase().trim(), count:smartInt(c[iC]) }))
-      .filter(r=>r.city && Number.isFinite(r.count))
-      .sort((a,b)=>b.count-a.count)
-      .slice(0, 10);
+    let values = rows.map(c=>({ city:(c[iCity]||'').toLowerCase().trim(), count:smartInt(c[iC]) }))
+                     .filter(r=>r.city && Number.isFinite(r.count))
+                     .sort((a,b)=>b.count-a.count).slice(0, 10);
 
     const titleCase = s => s.replace(/\b\w/g, m=>m.toUpperCase());
     values = values.map(d => ({...d, cityLabel: titleCase(d.city)}));
@@ -789,108 +466,206 @@ async function renderCities(){
       desc.textContent = `Top cities by total reports. The leader is ${titleCase(top.city)} with ${fmt(top.count)} sightings. Together, the top ten account for ${fmt(totalTop10)} reports. Notable hotspots include ${list}.`;
     }
 
-    const GREY = '#64748b';
-
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
-      width:580, height:360,
+      width: 560, height: 360,
       padding: {left: 90, right: 20, top: 10, bottom: 30},
       data:{ values },
       layer: [
-        {
-          mark:{ type:'bar', cornerRadiusEnd: 4 },
+        { mark:{ type:'bar', cornerRadiusEnd: 4 },
           encoding:{
             y:{ field:'cityLabel', type:'nominal', sort:'-x', title:null, axis:{labelColor:'#e5e7eb'} },
             x:{ field:'count', type:'quantitative', title:'Reports',
                 axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb', gridColor:'#1f2937'} },
-            color:{ condition:{ test:`datum.city === '${top.city}'`, value: BLUE }, value: GREY },
-            tooltip:[ {field:'cityLabel', title:'City'},
-                      {field:'count', type:'quantitative', title:'Reports', format:',d'} ]
-          }
-        },
+            color:{ condition:{ test:`datum.city === '${top.city}'`, value:'#38bdf8' }, value:'#64748b' },
+            tooltip:[ {field:'cityLabel', title:'City'}, {field:'count', type:'quantitative', title:'Reports', format:',d'} ]
+          } },
         { mark:{ type:'text', align:'left', dx:6, fontSize:11, fill:'#e5e7eb' },
-          encoding:{ y:{ field:'cityLabel', type:'nominal', sort:'-x' },
-                     x:{ field:'count', type:'quantitative' },
-                     text:{ field:'count', type:'quantitative', format:',d' } }
-        }
+          encoding:{ y:{ field:'cityLabel', type:'nominal', sort:'-x' }, x:{ field:'count', type:'quantitative' },
+                     text:{ field:'count', type:'quantitative', format:',d' } } }
       ],
       config:{ background:null, view:{stroke:null} }
     };
     await vegaEmbed('#cities', spec, {actions:false});
-  }catch(e){ console.error('Cities error:', e); }
+  }catch(e){ console.error('Cities (top 10) error:', e); }
 }
 
-/* ---------- G) SHAPES (Top 5, DONUT) ---------- */
+/* ---------------- F) SHAPES — single 100% stacked bar (ALL shapes) ---------------- */
 async function renderShapes(){
   try{
-    // load
     const {text} = await fetchFirst(PATHS.shapes);
-    const first = (text.split(/\r?\n/)[0]||'');
-    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
+    const first = (text.split(/\r?\n/)[0]||''); const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
     const iS = head.indexOf("shape");
     const iC = Math.max(head.indexOf("count"), head.indexOf("total"), head.indexOf("value"));
 
-    // tidy + aggregate (all shapes)
-    const titleCase = s => s.replace(/\b\w/g, m=>m.toUpperCase());
-    const byShape = new Map();
-    for (const r of rows){
-      const shape = (r[iS]||'').toString().trim().toLowerCase();
-      const count = smartInt(r[iC]);
-      if(!shape || !Number.isFinite(count)) continue;
-      byShape.set(shape, (byShape.get(shape)||0) + count);
-    }
-    const values = [...byShape.entries()]
-      .map(([shape,count]) => ({ label: titleCase(shape), count }))
-      .sort((a,b)=>b.count-a.count);
-
+    let values = rows.map(c => ({ shape:(c[iS]||'').toString().trim(), count: smartInt(c[iC]) }))
+                     .filter(d=>d.shape && Number.isFinite(d.count));
     const total = values.reduce((s,d)=>s+d.count,0);
-    const desc = document.getElementById('shapes-desc');
-    if (desc){
-      desc.textContent = `All reported shapes shown as a single stacked bar (100% scale). Hover to see counts and share. Total shape-labelled reports: ${new Intl.NumberFormat('en-US').format(total)}.`;
-    }
+    values = values.map(d=>({ ...d, pct: total ? d.count/total : 0 }));
 
-    // Vega-Lite: single 100% stacked bar across X (proportions), colored by shape
+    // Sort by size desc so segments appear left->right largest first
+    values.sort((a,b)=>b.count-a.count);
+
     const spec = {
-      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      width: "container",
-      height: 120,
-      autosize: { type: "fit", contains: "padding" },
-      data: { values },
-      transform: [
-        { calculate: '"All shapes"', as: "group" },
-        { joinaggregate: [{ op: "sum", field: "count", as: "total" }] },
-        { calculate: "datum.count / datum.total", as: "pct" }
-      ],
-      mark: { type: "bar", cornerRadiusEnd: 2 },
-      encoding: {
-        y: { field: "group", type: "nominal", title: null, axis: { labels: false, ticks: false } },
-        x: { field: "count", type: "quantitative", stack: "normalize", axis: { format: "%" }, title: "Share of shape reports" },
-        color: { field: "label", type: "nominal", title: "Shape", legend: { labelColor: "#e5e7eb" }, scale: { scheme: "tableau10" } },
-        tooltip: [
-          { field: "label", title: "Shape" },
-          { field: "count", type: "quantitative", title: "Reports", format: ",d" },
-          { field: "pct", type: "quantitative", title: "Share", format: ".1%" }
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:560, height:160,
+      data:{ values },
+      transform:[ { calculate: '"All shapes"', as:'cat' } ],
+      mark:{ type:'bar' },
+      encoding:{
+        y:{ field:'cat', type:'nominal', title:null, axis:{labels:false, ticks:false, domain:false} },
+        x:{ field:'pct', type:'quantitative', stack:'normalize', title:null,
+            axis:{ format:'%', labelColor:'#e5e7eb', titleColor:'#e5e7eb' } },
+        color:{ field:'shape', type:'nominal', title:'Shape',
+                legend:{ columns:2, labelColor:'#e5e7eb', titleColor:'#e5e7eb' } },
+        tooltip:[
+          { field:'shape', title:'Shape' },
+          { field:'count', type:'quantitative', title:'Reports', format:',d' },
+          { field:'pct', type:'quantitative', title:'Share', format:'.1%' }
         ]
       },
-      view: { stroke: null },
-      config: { background: null, axis: { labelColor: "#e5e7eb", titleColor: "#e5e7eb" } }
+      config:{ background:null, view:{stroke:null} }
     };
+    await vegaEmbed('#shapes', spec, {actions:false});
 
-    await vegaEmbed('#shapes', spec, { actions:false });
-  }catch(e){ console.error('Shapes (stacked) error:', e); }
+    const fmt = new Intl.NumberFormat('en-US').format;
+    const p = document.getElementById('shapes-desc');
+    if (p) p.textContent = `All reported shapes shown as a single stacked bar (100% scale). Hover to see counts and share. Total shape-labelled reports: ${fmt(total)}.`;
+  }catch(e){ console.error('Shapes error:', e); }
 }
-/* ---------- RUN ALL ---------- */
+
+/* ---------------- G) YEARLY — focus + context (brush) ---------------- */
+async function renderYearly(){
+  // parse helper
+  const parseCSV = (text) => {
+    const first = (text.split(/\r?\n/)[0]||'');
+    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
+    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
+    const head = (rows.shift()||[]).map(h=>h.trim().toLowerCase());
+    return { head, rows };
+  };
+
+  async function loadYearCSV(){
+    try{
+      const {text} = await fetchFirst(PATHS.yearly);
+      const {head, rows} = parseCSV(text);
+      const iY = head.indexOf('year');
+      const iC = Math.max(head.indexOf('count'), head.indexOf('total'), head.indexOf('value'), head.indexOf('sightings'));
+      if (iY<0 || iC<0) return [];
+      return rows.map(r=>({year:+r[iY], count:smartInt(r[iC])}))
+                 .filter(d=>Number.isFinite(d.year)&&Number.isFinite(d.count)).sort((a,b)=>a.year-b.year);
+    }catch{ return []; }
+  }
+  async function buildFromRaw(){
+    try{
+      const {text} = await fetchFirst(PATHS.raw);
+      const {head, rows} = parseCSV(text);
+      const iCountry = head.indexOf('country');
+      const iDT = [head.indexOf('datetime'), head.indexOf('date_time'), head.indexOf('date'), head.indexOf('occurred'), head.indexOf('sighted_at')].find(i=>i>=0);
+      const byYear = new Map();
+      for (const r of rows){
+        if (iCountry>=0 && (r[iCountry]||'').trim().toLowerCase()!=='us') continue;
+        const m = String(r[iDT]||'').match(/(\d{4})/); if (!m) continue;
+        const y = +m[1]; if (!Number.isFinite(y)) continue;
+        byYear.set(y, (byYear.get(y)||0)+1);
+      }
+      return [...byYear.entries()].map(([year,count])=>({year,count})).sort((a,b)=>a.year-b.year);
+    }catch{ return []; }
+  }
+
+  let values = await loadYearCSV();
+  if (!values.length) values = await buildFromRaw();
+  if (!values.length){
+    document.getElementById('yearly').innerHTML = '<p style="opacity:.75">No yearly data available.</p>';
+    return;
+  }
+
+  const fmt = new Intl.NumberFormat('en-US').format;
+  const span = `${values[0].year}–${values[values.length-1].year}`;
+  const total = values.reduce((s,d)=>s+d.count,0);
+  const peak = values.reduce((a,b)=> (b.count>a.count?b:a), values[0]);
+
+  // 5-year moving average
+  const ma5 = [];
+  for (let i=0, run=0; i<values.length; i++){
+    run += values[i].count;
+    if (i>=5) run -= values[i-5].count;
+    ma5.push({year: values[i].year, avg5: (i>=4) ? run/5 : null});
+  }
+
+  const p = document.getElementById('yearly-desc');
+  if (p){
+    p.textContent = `Annual reports rise steeply from the late 1990s into the 2000s. Span: ${span}; total ${fmt(total)} sightings. Peak year: ${peak.year} (${fmt(peak.count)} reports). Brush to zoom; the dashed line shows the 5-year average.`;
+  }
+
+  const PEAK_YEAR = peak.year;
+  const spec = {
+    $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+    vconcat: [
+      {
+        width:560, height:320,
+        data:{ values },
+        params: [
+          { name: "hover", select: {type:"point", fields:["year"], nearest:true, on:"mouseover", clear:"mouseout"} },
+          { name: "brush", select: {type:"interval", encodings:["x"]} }
+        ],
+        layer: [
+          { mark:{type:'area', opacity:0.10, color:'#38bdf8'},
+            encoding:{
+              x:{field:'year', type:'quantitative', title:'Year',
+                 axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}, scale:{domain:{param:"brush"}}},
+              y:{field:'count', type:'quantitative', title:'Sightings',
+                 axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}}
+            } },
+          { mark:{type:'line', color:'#38bdf8', strokeWidth:1.5},
+            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                       y:{field:'count', type:'quantitative'} } },
+          { data:{values: ma5.filter(d=>d.avg5!=null)},
+            mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
+            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                       y:{field:'avg5', type:'quantitative', title:'5-yr average'} } },
+          { mark:{type:'point', filled:true, size:40, color:'#38bdf8'},
+            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                       y:{field:'count', type:'quantitative'},
+                       opacity:{ condition:{param:'hover', empty:false, value:1}, value:0 } } },
+          { mark:{type:'point', opacity:0},
+            encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
+                       y:{field:'count', type:'quantitative'},
+                       tooltip:[ {field:'year', title:'Year'}, {field:'count', type:'quantitative', title:'Reports', format:',d'} ] } },
+          { data:{ values:[ { x: PEAK_YEAR } ] }, mark:{ type:'rule', stroke:'#e5e7eb', strokeDash:[4,3] },
+            encoding:{ x:{ field:'x', type:'quantitative', scale:{domain:{param:'brush'}} } } }
+        ],
+        config:{ background:null, axis:{gridColor:'#1f2937'} }
+      },
+      {
+        width:560, height:90,
+        data:{ values },
+        mark:{ type:'area', opacity:0.15, color:'#38bdf8' },
+        params:[ { name:"brush", select:{type:"interval", encodings:["x"]} } ],
+        encoding:{
+          x:{ field:'year', type:'quantitative', title:null, axis:{labels:false,ticks:false,domain:false} },
+          y:{ field:'count', type:'quantitative', title:null, axis:{labels:false,ticks:false,domain:false} }
+        },
+        config:{ background:null, view:{stroke:null} }
+      }
+    ],
+    config:{ background:null }
+  };
+
+  await vegaEmbed('#yearly', spec, {actions:false});
+}
+
+/* ---------------- RUN ALL ---------------- */
 Promise.all([
   renderKPIs(),
   renderStateChoropleth(),
   renderMapFromCities(),
-  renderMonthly(),
-  renderYearly(),
   renderHourly(),
   renderCities(),
-  renderShapes()
+  renderShapes(),
+  renderYearly()
 ]);
 </script>
 </body>
