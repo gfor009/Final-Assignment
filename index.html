@@ -428,7 +428,7 @@ async function renderMapFromCities(){
       width:1180, height:420,
       projection:{ type:'albersUsa' },
       layer:[
-        { data: topo, mark:{ type:'geoshape', fill:'#98a0ab', stroke:'#091120' } },
+        { data: topo, mark:{ type:'geoshape', fill:'#FFFFFF', stroke:'#091120' } },
         { data:{ values },
           transform:[ {calculate:`min(datum.count, ${domainMax})`, as:'count_capped'} ],
           mark:{ type:'circle', opacity:0.85, stroke:'#0b1220', strokeWidth:0.5, tooltip:true },
