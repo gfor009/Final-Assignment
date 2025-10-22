@@ -552,6 +552,7 @@ async function renderMonthly(){
 
 /* ---------- D) YEARLY (focus+context) ---------- */
 async function renderYearly(){
+  // helper to read a CSV text into rows + header with auto delimiter
   const parseCSV = (text) => {
     const first = (text.split(/\r?\n/)[0]||'');
     const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
@@ -560,6 +561,7 @@ async function renderYearly(){
     return { head, rows };
   };
 
+  // 1) Try the tidy yearly CSV
   async function loadYearCSV(){
     try{
       const {text} = await fetchFirst(PATHS.yearly);
@@ -573,6 +575,7 @@ async function renderYearly(){
     }catch{ return []; }
   }
 
+  // 2) Fallback: build per-year counts from scrubbed.csv (US only)
   async function buildFromRaw(){
     try{
       const {text} = await fetchFirst(PATHS.raw);
@@ -594,13 +597,17 @@ async function renderYearly(){
     }catch{ return []; }
   }
 
+  // 3) Get data (with fallback)
   let values = await loadYearCSV();
   if (!values.length) values = await buildFromRaw();
+
+  const mount = document.getElementById('yearly');
   if (!values.length){
-    document.getElementById('yearly').innerHTML = '<p style="opacity:.75">No yearly data available.</p>';
+    mount.innerHTML = '<p style="opacity:.75">No yearly data available.</p>';
     return;
   }
 
+  // Stats + caption
   const fmt = new Intl.NumberFormat('en-US').format;
   const span = `${values[0].year}–${values[values.length-1].year}`;
   const total = values.reduce((s,d)=>s+d.count,0);
@@ -616,18 +623,20 @@ async function renderYearly(){
     p.textContent = `Annual reports rise steeply from the late 1990s into the 2000s. Span: ${span}; total ${fmt(total)} sightings. Peak year: ${peak.year} (${fmt(peak.count)} reports). Brush to zoom; the dashed line shows the 5-year average.`;
   }
 
+  // 4) Responsive focus + context (container width)
   const spec = {
     $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+    autosize:{ type:'fit', contains:'padding' },
     vconcat: [
       {
-        width:580, height:290,
+        width:'container', height:320,
         data:{ values },
         params: [
           { name: "hover", select: {type:"point", fields:["year"], nearest:true, on:"mouseover", clear:"mouseout"} },
           { name: "brush", select: {type:"interval", encodings:["x"]} }
         ],
         layer: [
-          { mark:{type:'area', opacity:0.10, color:BLUE},
+          { mark:{type:'area', opacity:0.10, color:'#38bdf8'},
             encoding:{
               x:{field:'year', type:'quantitative', title:'Year',
                  axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}, scale:{domain:{param:"brush"}}},
@@ -635,16 +644,16 @@ async function renderYearly(){
                  axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}}
             }
           },
-          { mark:{type:'line', color:BLUE, strokeWidth:1.5},
+          { mark:{type:'line', color:'#38bdf8', strokeWidth:1.5},
             encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
                        y:{field:'count', type:'quantitative'} }
           },
           { data:{values: ma5.filter(d=>d.avg5!=null)},
             mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
             encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
-                       y:{field:'avg5', type:'quantitative', title:'5-yr avg'} }
+                       y:{field:'avg5', type:'quantitative', title:'5-yr average'} }
           },
-          { mark:{type:'point', filled:true, size:40, color:BLUE},
+          { mark:{type:'point', filled:true, size:40, color:'#38bdf8'},
             encoding:{ x:{field:'year', type:'quantitative', scale:{domain:{param:"brush"}}},
                        y:{field:'count', type:'quantitative'},
                        opacity:{ condition:{param:'hover', empty:false, value:1}, value:0 } }
@@ -659,9 +668,9 @@ async function renderYearly(){
         config:{ background:null, axis:{gridColor:'#1f2937'} }
       },
       {
-        width:580, height:70,
+        width:'container', height:90,
         data:{ values },
-        mark:{ type:'area', opacity:0.15, color:BLUE },
+        mark:{ type:'area', opacity:0.15, color:'#38bdf8' },
         params:[ { name:"brush", select:{type:"interval", encodings:["x"]} } ],
         encoding:{
           x:{ field:'year', type:'quantitative', title:null,
@@ -675,7 +684,31 @@ async function renderYearly(){
     config:{ background:null }
   };
 
-  await vegaEmbed('#yearly', spec, {actions:false});
+  try{
+    await vegaEmbed(mount, spec, {actions:false, renderer:'canvas'});
+  }catch(err){
+    console.warn('Focus+context failed, falling back to simple line:', err);
+    const simple = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      autosize:{ type:'fit', contains:'padding' },
+      width:'container', height:360,
+      data:{ values },
+      layer:[
+        { mark:{ type:'area', opacity:0.10, color:'#38bdf8'},
+          encoding:{ x:{field:'year', type:'quantitative', title:'Year',
+                         axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}},
+                     y:{field:'count', type:'quantitative', title:'Sightings',
+                         axis:{labelColor:'#e5e7eb', titleColor:'#e5e7eb'}} } },
+        { mark:{type:'line', color:'#38bdf8', strokeWidth:1.5},
+          encoding:{ x:{field:'year', type:'quantitative'}, y:{field:'count', type:'quantitative'} } },
+        { data:{values: ma5.filter(d=>d.avg5!=null)},
+          mark:{type:'line', color:'#9dd6ff', strokeDash:[4,3], strokeWidth:2},
+          encoding:{ x:{field:'year', type:'quantitative'}, y:{field:'avg5', type:'quantitative'} } }
+      ],
+      config:{ background:null, axis:{gridColor:'#1f2937'} }
+    };
+    await vegaEmbed(mount, simple, {actions:false, renderer:'canvas'});
+  }
 }
 
 /* ---------- E) HOURLY ---------- */
