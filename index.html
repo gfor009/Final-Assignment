@@ -25,7 +25,7 @@
 
     --gap-1:12px; --gap-2:16px; --gap-3:24px; --gap-4:32px; --gap-5:48px;
     --radius:16px;
-    --container:1200px; /* desktop friendly width */
+    --container:1200px; /* desktop-friendly width */
   }
 
   html, body { height:100% }
@@ -116,7 +116,7 @@
     <article class="card">
       <h2>What time do the UFO visit Earth?</h2>
       <div id="hourly" class="viz" aria-label="Radial bar chart of reports by hour"></div>
-      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn. This pattern makes sense, people are more likely to be outside or looking up during the early evening hours, and the dark sky makes unusual lights easier to spot. It’s a reminder that sometimes, when the world slows down and the stars come out, our imaginations start to roam a little further too..</p>
+      <p class="caption">Most UFO reports light up the timeline right after sunset, peaking between 6 PM and 11 PM, when the sky is dark but still alive with human activity. As the night deepens, the sightings slowly fade, tapering off toward dawn. This pattern makes sense—people are more likely to be outside or looking up during the early evening hours, and the dark sky makes unusual lights easier to spot. It’s a reminder that sometimes, when the world slows down and the stars come out, our imaginations roam a little further too.</p>
     </article>
 
     <!-- WHAT: Top 10 cities (ranking) -->
@@ -300,7 +300,8 @@ async function renderStateChoropleth(){
     const total = counts.reduce((s,d)=>s+d.count,0);
     const descEl = document.getElementById('chor-desc');
     if (descEl){
-      descEl.textContent = `Each state is shaded based on the total number of UFO sightings reported across the U.S., a staggering ${fmt(total)} in total. Unsurprisingly, California is the highest with ${top}, reports, followed by Washington (3,651) and Florida (3,644), all known for their clear skies and busy skies alike. On the other end of the spectrum, Delaware (153), North Dakota (120), and Washington D.C. (6) have seen far fewer mysterious lights. The map paints a fascinating picture of how geography, population, and perhaps a little imagination influence where people are most likely to spot something “unidentified” in the night sky. Lowest: ${bottom}.`;
+      descEl.textContent =
+        `Each state is shaded by total UFO sightings, ${fmt(total)} reports in all. Highest: ${top}. Lowest: ${bottom}. Larger, more populous states tend to report more sightings.`;
     }
 
     const spec = {
@@ -369,7 +370,8 @@ async function renderMapFromCities(){
     const top5 = values.slice(0,5).map(d => `${d.city}, ${d.state} (${fmt(d.count)})`).join(', ');
     const desc = document.getElementById('citiesmap-desc');
     if (desc){
-      desc.textContent = `Each bubble on the map represents a city, with its size showing how many UFO sightings were reported there. To make the data pop against a dark background, the map uses a clean white basemap for contrast. The visual highlights the top 300 cities, which together account for ${fmt(totalTop)} reports, nearly a third of all U.S. sightings. Leading the list are Seattle, WA (472), Phoenix, AZ (439), Las Vegas, NV (335), Los Angeles, CA (333), and San Diego, CA (319) all places known for wide-open skies and vibrant nightlife, where strange lights and unexplained glows might just catch your eye. The result is a snapshot of where curiosity and maybe a bit of cosmic wonder shines brightest.`;
+      desc.textContent =
+        `Each bubble marks a city; bubble size encodes total reports. White basemap improves contrast. Top 300 cities shown (${fmt(totalTop)} reports). Leaders include: ${top5}.`;
     }
 
     const spec = {
@@ -459,7 +461,8 @@ async function renderCities(){
     const desc = document.getElementById('cities-desc');
     if (desc){
       const list = values.slice(0,5).map(d=>`${titleCase(d.city)} (${fmt(d.count)})`).join(', ');
-      desc.textContent = `The map highlights the cities that have reported the most UFO sightings across the U.S., with ${titleCase(top.city)} taking the top spot at ${fmt(top.count)} sightings. In total, the top ten cities contribute an impressive ${fmt(totalTop10)} reports, showing just how concentrated some of these “hotspots” are. Other standout locations include Phoenix (423), Portland (342), Las Vegas (339), and Los Angeles (333), all cities where bright skies, bustling nightlife, and open horizons might make mysterious lights hard to ignore. These clusters suggest that UFO fascination thrives not just in remote areas, but also in the heart of America’s most active urban centers.`;
+      desc.textContent =
+        `Top cities by total reports. Leader: ${titleCase(top.city)} with ${fmt(top.count)} sightings. The top ten account for ${fmt(totalTop10)} reports. Notable hotspots include ${list}.`;
     }
 
     const spec = {
@@ -500,9 +503,7 @@ async function renderShapes(){
                      .filter(d=>d.shape && Number.isFinite(d.count));
     const total = values.reduce((s,d)=>s+d.count,0);
     values = values.map(d=>({ ...d, pct: total ? d.count/total : 0 }));
-
-    // Sort by size desc so segments appear left->right largest first
-    values.sort((a,b)=>b.count-a.count);
+    values.sort((a,b)=>b.count-a.count); // largest left-to-right
 
     const spec = {
       $schema:'https://vega.github.io/schema/vega-lite/v5.json',
@@ -528,7 +529,8 @@ async function renderShapes(){
 
     const fmt = new Intl.NumberFormat('en-US').format;
     const p = document.getElementById('shapes-desc');
-    if (p) p.textContent = `This chart compresses all UFO shape reports into a single 100% stacked bar, giving a clear view of the overall mix at a glance. Larger segments represent the most commonly reported shapes like lights, triangles, circles, and fireballs, while smaller slivers show the rarer, more unusual forms such as cigars, chevrons, and disks. Hover over each segment to see its exact count and share of the ${fmt(total)} shape-labelled reports. Categories like “unknown/other” collect ambiguous descriptions, so they’re best seen as a catch-all rather than a specific shape. The pattern is clear: most sightings cluster around a few familiar shapes, with many unique forms making up only a small fraction of the total.`;
+    if (p) p.textContent =
+      `This chart compresses all UFO shape reports into a single 100% stacked bar. Larger segments represent common shapes (lights, triangles, circles, fireballs), while thinner slivers are rarer forms. Hover to see exact counts and shares out of ${fmt(total)} shape-labelled reports. “Unknown/Other” groups ambiguous descriptions.`;
   }catch(e){ console.error('Shapes error:', e); }
 }
 
@@ -565,7 +567,7 @@ async function renderYearly(){
       const iCountry = head.indexOf('country');
       const iDT = [head.indexOf('datetime'), head.indexOf('date_time'), head.indexOf('date'),
                    head.indexOf('occurred'), head.indexOf('sighted_at')].find(i=>i>=0);
-      if (iDT === undefined || iDT < 0) return [];  // <— guard
+      if (iDT === undefined || iDT < 0) return [];
       const byYear = new Map();
       for (const r of rows){
         if (iCountry>=0 && (r[iCountry]||'').trim().toLowerCase()!=='us') continue;
@@ -605,7 +607,7 @@ async function renderYearly(){
 
   const p = document.getElementById('yearly-desc');
   if (p){
-    p.textContent = Each point on the chart shows the total number of UFO reports for a given year. The trend stays relatively flat through much of the mid-20th century, then rises sharply from the late 1990s into the 2000s before gradually easing off. The dashed line represents a five-year moving average, which smooths out short-term fluctuations to make the long-term pattern easier to see. You can use the brush in the lower panel to zoom into any period, which filters the main chart to that span, and hovering over the line shows the exact year and report count. This chart reveals more than just sightings; it reflects social and technological factors such as media coverage, reporting channels, and the spread of the internet that have shaped how and when people report UFOs over time.`;
+    p.textContent = "Each point represents the total number of UFO reports for a year. The trend is flat through much of the mid-20th century, then climbs sharply from the late 1990s into the 2000s before easing. The dashed line shows a five-year moving average to smooth short-term noise. Use the brush in the lower panel to zoom any span; hover to see exact counts. Beyond sightings, the curve reflects social and technological factors—media cycles, reporting channels, and the rise of the internet—that shaped how people reported UFOs over time.";
   }
 
   // Focus+context spec
