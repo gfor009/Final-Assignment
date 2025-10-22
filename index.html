@@ -49,9 +49,9 @@
 </div>
 
     <div class="card">
-      <h2>Hourly rhythm (radial) <span id="b-hourly" class="badge">checking…</span></h2>
-      <div id="hourly" class="viz"></div>
-    </div>
+  <h2>UFO reports by hour (radial)</h2>
+  <div id="hourly" class="viz"></div>
+</div>
 
     <div class="card">
       <h2>Top 10 cities <span id="b-cities" class="badge">checking…</span></h2>
@@ -435,21 +435,72 @@ async function renderMonthly(){
 async function renderHourly(){
   try{
     const {url,text} = await fetchFirst(PATHS.hourly);
-    const delim = (text.split(/\r?\n/)[0]||'').includes(';') ? ';' : ',';
+    const first = (text.split(/\r?\n/)[0]||'');
+    const delim = first.includes('\t') ? '\t' : (first.includes(';') ? ';' : ',');
     const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
     const head = rows.shift().map(h=>h.trim().toLowerCase());
-    const iH=head.indexOf("hour"), iC = Math.max(head.indexOf("count"), head.indexOf("total"));
-    const values = rows.map(c=>({hour:+c[iH], count:smartInt(c[iC])})).filter(d=>isFinite(d.hour)&&isFinite(d.count));
-    setBadge("b-hourly", `loaded ${values.length} rows from ${url}`);
-    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
-      transform:[{calculate:'format(datum.hour,"02")', as:'hlabel'}],
-      mark:{type:'arc',innerRadius:90,stroke:'#0b1220'},
-      encoding:{theta:{field:'count',type:'quantitative',stack:true,title:'Reports'},
-                color:{field:'hlabel',type:'nominal',legend:{title:'Hour (00–23)',orient:'bottom',columns:6,labelLimit:160}},
-                tooltip:[{field:'hour',title:'Hour'},{field:'count',type:'quantitative'}]},
-      config:{legend:{orient:'bottom'}}};
+    const iH = head.indexOf("hour");
+    const iC = Math.max(head.indexOf("count"), head.indexOf("total"), head.indexOf("value"), head.indexOf("reports"));
+
+    let values = rows.map(c=>({hour:+c[iH], count:smartInt(c[iC])}))
+                     .filter(d=>Number.isFinite(d.hour)&&Number.isFinite(d.count));
+    // ensure hours 0–23 present (balanced layout)
+    const have = new Set(values.map(d=>d.hour));
+    for (let h=0; h<24; h++) if(!have.has(h)) values.push({hour:h, count:0});
+    values = values.sort((a,b)=>a.hour-b.hour);
+
+    // render radial bar (theta = hour band, radius = count)
+    const spec = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:560, height:420,
+      data:{ values },
+      // nicer labels: 00–23
+      transform:[{ calculate:'format(datum.hour,"02")', as:'hlabel' }],
+      layer:[
+        {
+          mark:{ type:'arc', innerRadius:80, cornerRadius:3, stroke:'#0b1220', strokeWidth:0.6 },
+          encoding:{
+            theta:{ field:'hlabel', type:'nominal', sort:null, title:null },   // equal slices
+            radius:{ field:'count', type:'quantitative', title:'Reports',
+                     scale:{ rangeMin:80, rangeMax:190 } },                    // radial bar length
+            color:{ field:'count', type:'quantitative',
+                    title:'Reports',
+                    scale:{ scheme:'cividis' },                                 // color-blind friendly
+                    legend:{
+                      orient:'right',
+                      tickCount:5,
+                      format:',d',
+                      titleColor:'#e5e7eb',
+                      labelColor:'#e5e7eb',
+                      gradientLength:160
+                    }},
+            tooltip:[
+              { field:'hour', title:'Hour (00–23)'},
+              { field:'count', type:'quantitative', title:'Reports', format:',d'}
+            ]
+          }
+        },
+        // hour ticks around the rim for readability
+        {
+          mark:{ type:'text', radius:205, fontSize:10, fill:'#e5e7eb' },
+          encoding:{
+            theta:{ field:'hlabel', type:'nominal', sort:null },
+            text:{ field:'hlabel' }
+          }
+        }
+      ],
+      view:{ stroke:null },
+      config:{
+        background:null,
+        axis:{ labelColor:'#e5e7eb', titleColor:'#e5e7eb' }
+      }
+    };
+
     await vegaEmbed('#hourly', spec, {actions:false});
-  }catch(e){ console.error('Hourly error:', e); setBadge('b-hourly','failed to load', false); }
+  }catch(e){
+    console.error('Hourly error:', e);
+    setBadge('b-hourly','failed to load', false); // safe if badge still exists
+  }
 }
 async function renderCities(){
   try{
