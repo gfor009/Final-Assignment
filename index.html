@@ -331,24 +331,94 @@ async function renderMapFromCities(){
 /* ---------- OTHER CHARTS (unchanged) ---------- */
 async function renderMonthly(){
   try{
-    const {url,text} = await fetchFirst(PATHS.monthly);
-    const delim = (text.split(/\r?\n/)[0]||'').includes(';') ? ';' : ',';
-    const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
-    const head = rows.shift().map(h=>h.trim().toLowerCase());
-    const find = (names)=>{ for(const n of names){ const i=head.indexOf(n); if(i>=0) return i; } return -1; };
-    const iM = find(['month','date']), iC = find(['count','total','value','sightings']);
-    const values = rows.map(c=>{ const k=ymKey(c[iM]); const cnt=smartInt(c[iC]); return k&&isFinite(cnt)?{date:new Date(k+'-01'),count:cnt}:null; }).filter(Boolean);
-    setBadge("b-monthly", `loaded ${values.length} rows from ${url}`);
-    if (!values.length){ document.getElementById('monthly').innerHTML = '<p style="opacity:.75">No valid rows parsed from <code>ufo_monthly.csv</code>.</p>'; return; }
-    const spec = {$schema:'https://vega.github.io/schema/vega-lite/v5.json', width:560,height:340,data:{values},
+    // --- 1) try ufo_monthly.csv if present/valid ---
+    const tryMonthly = async ()=>{
+      const {url, text} = await fetchFirst(PATHS.monthly);
+      const delim = (text.split(/\r?\n/)[0]||'').includes(';') ? ';' : ',';
+      const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
+      const head = rows.shift()?.map(h=>h.trim().toLowerCase()) || [];
+      const find = (names)=>{ for(const n of names){ const i=head.indexOf(n); if(i>=0) return i; } return -1; };
+      const iM = find(['month','date']), iC = find(['count','total','value','sightings']);
+      if (iM < 0 || iC < 0) return { url, values: [] };
+
+      const values = rows.map(c=>{
+        const k = ymKey(c[iM]); const cnt = smartInt(c[iC]);
+        return k && isFinite(cnt) ? { date:new Date(k+'-01'), count:cnt } : null;
+      }).filter(Boolean);
+
+      return { url, values };
+    };
+
+    // --- 2) fallback: build months from scrubbed.csv (datetime) ---
+    const buildFromRaw = async ()=>{
+      const {url, text} = await fetchFirst(PATHS.raw);
+      const first = (text.split(/\r?\n/)[0]||'');
+      const delim = first.includes(';') ? ';' : ',';
+      const rows = text.trim().split(/\r?\n/).filter(Boolean).map(r=>r.split(delim));
+      const head = rows.shift()?.map(h=>h.trim().toLowerCase()) || [];
+      const idx = n => head.indexOf(n);
+
+      // likely column names in NUFORC-style data
+      const iCountry = idx('country');
+      const iDT = [idx('datetime'), idx('date_time'), idx('date'), idx('occurred'), idx('sighted_at')]
+                    .reduce((a,b)=>a>=0?a:b, -1);
+
+      if (iDT < 0) return { url, values: [] };
+
+      const byYM = new Map();
+      for (const r of rows){
+        if (iCountry >= 0 && (r[iCountry]||'').trim().toLowerCase() !== 'us') continue;
+        const k = ymKey(r[iDT]);
+        if (!k) continue;
+        byYM.set(k, (byYM.get(k)||0) + 1);
+      }
+      const values = [...byYM.entries()]
+        .map(([k,c]) => ({ date:new Date(k+'-01'), count:c }))
+        .sort((a,b)=>a.date-b.date);
+
+      return { url, values };
+    };
+
+    // try monthly file; if empty, build from raw
+    let {url, values} = await tryMonthly();
+    if (!values.length){
+      const built = await buildFromRaw();
+      url = built.url; values = built.values;
+      setBadge("b-monthly", `built ${values.length} months from ${url}`);
+    }else{
+      setBadge("b-monthly", `loaded ${values.length} rows from ${url}`);
+    }
+
+    if (!values.length){
+      document.getElementById('monthly').innerHTML =
+        '<p style="opacity:.75">No valid monthly data found.</p>';
+      return;
+    }
+
+    // render chart
+    const spec = {
+      $schema:'https://vega.github.io/schema/vega-lite/v5.json',
+      width:560, height:340,
+      data:{ values },
       layer:[
-        {mark:{type:'area',opacity:0.15,color:BLUE}, encoding:{x:{field:'date',type:'temporal',title:'Month'}, y:{field:'count',type:'quantitative',title:'Sightings'}}},
-        {mark:{type:'line',color:BLUE}, encoding:{x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'}}},
-        {mark:{type:'point',color:BLUE}, encoding:{x:{field:'date',type:'temporal'}, y:{field:'count',type:'quantitative'}, tooltip:[{field:'date',type:'temporal'},{field:'count',type:'quantitative'}]}}
+        { mark:{ type:'area', opacity:0.15, color:BLUE },
+          encoding:{ x:{field:'date',type:'temporal',title:'Month'},
+                     y:{field:'count',type:'quantitative',title:'Sightings'} } },
+        { mark:{ type:'line', color:BLUE },
+          encoding:{ x:{field:'date',type:'temporal'},
+                     y:{field:'count',type:'quantitative'} } },
+        { mark:{ type:'point', color:BLUE },
+          encoding:{ x:{field:'date',type:'temporal'},
+                     y:{field:'count',type:'quantitative'},
+                     tooltip:[{field:'date',type:'temporal'},{field:'count',type:'quantitative'}] } }
       ],
-      config:{background:null}};
+      config:{ background:null }
+    };
     await vegaEmbed('#monthly', spec, {actions:false});
-  }catch(e){ console.error('Monthly error:', e); setBadge('b-monthly','failed to load', false); }
+  }catch(e){
+    console.error('Monthly error:', e);
+    setBadge('b-monthly','failed to load', false);
+  }
 }
 async function renderHourly(){
   try{
