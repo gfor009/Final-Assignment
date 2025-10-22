@@ -528,7 +528,7 @@ async function renderShapes(){
 
     const fmt = new Intl.NumberFormat('en-US').format;
     const p = document.getElementById('shapes-desc');
-    if (p) p.textContent = `This chart shows all reported UFO shapes in a single stacked bar, giving a clear picture of the variety of sightings on a 100% scale. Hover over each section to see the exact number of reports and their share of the total. Out of 61,452 total reports, ${fmt(total)} include a shape description, revealing everything from classic discs and triangles to less common forms. The visual makes it easy to see which shapes dominate the imagination and which are rarer, highlighting the wide range of experiences people have when looking up at the night sky.`;
+    if (p) p.textContent = `This chart compresses all UFO shape reports into a single 100% stacked bar, giving a clear view of the overall mix at a glance. Larger segments represent the most commonly reported shapes like lights, triangles, circles, and fireballs, while smaller slivers show the rarer, more unusual forms such as cigars, chevrons, and disks. Hover over each segment to see its exact count and share of the ${fmt(total)} shape-labelled reports. Categories like “unknown/other” collect ambiguous descriptions, so they’re best seen as a catch-all rather than a specific shape. The pattern is clear: most sightings cluster around a few familiar shapes, with many unique forms making up only a small fraction of the total.`;
   }catch(e){ console.error('Shapes error:', e); }
 }
 
@@ -605,7 +605,7 @@ async function renderYearly(){
 
   const p = document.getElementById('yearly-desc');
   if (p){
-    p.textContent = `Annual reports rise steeply from the late 1990s into the 2000s. Span: ${span}; total ${fmt(total)} sightings. Peak year: ${peak.year} (${fmt(peak.count)} reports). Brush to zoom; the dashed line shows the 5-year average.`;
+    p.textContent = Each point on the chart shows the total number of UFO reports for a given year. The trend stays relatively flat through much of the mid-20th century, then rises sharply from the late 1990s into the 2000s before gradually easing off. The dashed line represents a five-year moving average, which smooths out short-term fluctuations to make the long-term pattern easier to see. You can use the brush in the lower panel to zoom into any period, which filters the main chart to that span, and hovering over the line shows the exact year and report count. This chart reveals more than just sightings; it reflects social and technological factors such as media coverage, reporting channels, and the spread of the internet that have shaped how and when people report UFOs over time.`;
   }
 
   // Focus+context spec
